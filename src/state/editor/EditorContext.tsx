@@ -107,7 +107,7 @@ function reducer(state: State, action: Action): State {
       };
     case "undo": {
       if (!state.past.length) return state;
-      const previous = state.past[state.past.length - 1];
+      const previous = state.past[state.past.length - 1]!;
       return {
         ...state,
         edit: previous,
@@ -117,7 +117,7 @@ function reducer(state: State, action: Action): State {
     }
     case "redo": {
       if (!state.future.length) return state;
-      const next = state.future[0];
+      const next = state.future[0]!;
       return {
         ...state,
         edit: next,
