@@ -77,6 +77,8 @@ export function Canvas() {
 
   const zoomRef = useRef(zoomAt);
   zoomRef.current = zoomAt;
+  const viewportZoomRef = useRef(viewport.zoom);
+  viewportZoomRef.current = viewport.zoom;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -87,16 +89,12 @@ export function Canvas() {
       const px = e.clientX - rect.left - rect.width / 2;
       const py = e.clientY - rect.top - rect.height / 2;
       const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
-      const current = zoomRef.current;
-      current(zoomFromDelta(dy), px, py);
+      zoomRef.current(viewportZoomRef.current * Math.exp(-dy * 0.0018), px, py);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  const zoomFromDelta = (dy: number) => viewportZoomRef.current * Math.exp(-dy * 0.0018);
-  const viewportZoomRef = useRef(viewport.zoom);
-  viewportZoomRef.current = viewport.zoom;
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (activeTool === "crop") return;
