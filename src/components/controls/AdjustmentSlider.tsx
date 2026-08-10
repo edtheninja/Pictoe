@@ -8,6 +8,10 @@ export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
   const value = state.edit.adjustments[def.key];
   const defaultValue = DEFAULT_ADJUSTMENTS[def.key];
   const changed = value !== defaultValue;
+  const pct = (v: number) => ((v - def.min) / (def.max - def.min)) * 100;
+  const valuePct = pct(value);
+  const zeroPct = pct(defaultValue);
+
 
   return (
     <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-md gap-y-xs py-xs sm:grid-cols-[7rem_minmax(0,1fr)_3.5rem]">
@@ -36,9 +40,20 @@ export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
         onDoubleClick={() => resetAdjustment(def.key)}
       >
         <Slider.Track className="relative h-[3px] w-full grow rounded-full bg-border-strong">
-          <Slider.Range className="absolute h-full rounded-full bg-accent/70" />
+          {/* Bipolar sliders fill outward from their default position. */}
+          <span
+            className="absolute h-full rounded-full bg-accent/70"
+            style={{
+              left: `${Math.min(zeroPct, valuePct)}%`,
+              width: `${Math.abs(valuePct - zeroPct)}%`,
+            }}
+          />
         </Slider.Track>
-        <Slider.Thumb className="block h-3.5 w-3.5 rounded-full border border-accent bg-surface-elevated shadow-subtle transition-transform duration-150 hover:scale-110 focus-visible:scale-110" />
+        <Slider.Thumb
+          aria-label={def.label}
+          className="block h-3.5 w-3.5 rounded-full border border-accent bg-surface-elevated shadow-subtle transition-transform duration-150 hover:scale-110 focus-visible:scale-110"
+        />
+
       </Slider.Root>
 
       <div className="flex items-center justify-end gap-xs">
