@@ -6,7 +6,10 @@ export function CropOverlay() {
   if (state.activeTool !== "crop") return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3" aria-hidden="true">
+    <div
+      className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3"
+      aria-hidden="true"
+    >
       {Array.from({ length: 9 }).map((_, i) => (
         <div key={i} className="border border-text-primary/15" />
       ))}

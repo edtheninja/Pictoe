@@ -102,7 +102,12 @@ function reducer(state: State, action: Action): State {
     case "resetAll":
       return {
         ...state,
-        edit: { adjustments: { ...DEFAULT_ADJUSTMENTS }, crop: { ...DEFAULT_CROP }, rotation: 0, flipH: false },
+        edit: {
+          adjustments: { ...DEFAULT_ADJUSTMENTS },
+          crop: { ...DEFAULT_CROP },
+          rotation: 0,
+          flipH: false,
+        },
         ...pushHistory(state, state.edit),
       };
     case "undo": {

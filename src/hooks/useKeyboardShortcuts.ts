@@ -19,7 +19,8 @@ export function useKeyboardShortcuts() {
       }
       if (e.key === "\\" && !e.repeat) setShowOriginal(true);
       if (e.key === "0") setViewport({ zoom: 1, panX: 0, panY: 0 });
-      if (e.key === "+" || e.key === "=") setViewport({ zoom: Math.min(8, state.viewport.zoom * 1.25) });
+      if (e.key === "+" || e.key === "=")
+        setViewport({ zoom: Math.min(8, state.viewport.zoom * 1.25) });
       if (e.key === "-") setViewport({ zoom: Math.max(0.1, state.viewport.zoom / 1.25) });
     };
     const onKeyUp = (e: KeyboardEvent) => {

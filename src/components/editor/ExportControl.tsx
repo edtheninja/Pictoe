@@ -85,7 +85,9 @@ export function ExportControl() {
 
           {format !== "image/png" && (
             <>
-              <p className="mb-sm text-[12px] uppercase tracking-[0.14em] text-text-muted">Quality</p>
+              <p className="mb-sm text-[12px] uppercase tracking-[0.14em] text-text-muted">
+                Quality
+              </p>
               <div className="mb-lg flex gap-xs">
                 {[
                   { label: "High", value: 0.92 },

@@ -102,10 +102,26 @@ const RULES: Rule[] = [
 ];
 
 const CLOUD_RULES: { match: RegExp; label: string; description: string }[] = [
-  { match: /(remove|erase|delete)\s+(the\s+)?\w+/i, label: "Object removal", description: "Erasing objects needs Pictoe's cloud engine." },
-  { match: /(expand|extend|uncrop|outpaint)/i, label: "Generative expansion", description: "Expanding beyond the frame needs Pictoe's cloud engine." },
-  { match: /(replace|swap)\s+(the\s+)?(sky|background)/i, label: "Sky & background replacement", description: "Replacement needs Pictoe's cloud engine." },
-  { match: /(cut out|isolate|mask)\s+(the\s+)?(subject|person)/i, label: "Subject isolation", description: "Segmentation needs Pictoe's cloud engine." },
+  {
+    match: /(remove|erase|delete)\s+(the\s+)?\w+/i,
+    label: "Object removal",
+    description: "Erasing objects needs Pictoe's cloud engine.",
+  },
+  {
+    match: /(expand|extend|uncrop|outpaint)/i,
+    label: "Generative expansion",
+    description: "Expanding beyond the frame needs Pictoe's cloud engine.",
+  },
+  {
+    match: /(replace|swap)\s+(the\s+)?(sky|background)/i,
+    label: "Sky & background replacement",
+    description: "Replacement needs Pictoe's cloud engine.",
+  },
+  {
+    match: /(cut out|isolate|mask)\s+(the\s+)?(subject|person)/i,
+    label: "Subject isolation",
+    description: "Segmentation needs Pictoe's cloud engine.",
+  },
 ];
 
 function intensityOf(text: string) {
@@ -122,7 +138,8 @@ export function parseIntent(input: string): {
   if (!text) return { suggestions: [], cloudOnly: null };
 
   const cloud = CLOUD_RULES.find((r) => r.match.test(text));
-  if (cloud) return { suggestions: [], cloudOnly: { label: cloud.label, description: cloud.description } };
+  if (cloud)
+    return { suggestions: [], cloudOnly: { label: cloud.label, description: cloud.description } };
 
   const i = intensityOf(text);
   const suggestions = RULES.filter((r) => r.match.test(text)).map((r) => {
@@ -130,7 +147,10 @@ export function parseIntent(input: string): {
     return {
       ...s,
       patch: Object.fromEntries(
-        Object.entries(s.patch).map(([k, v]) => [k, Math.round(Math.max(-100, Math.min(100, v as number)))]),
+        Object.entries(s.patch).map(([k, v]) => [
+          k,
+          Math.round(Math.max(-100, Math.min(100, v as number))),
+        ]),
       ) as Partial<Record<AdjustmentKey, number>>,
     };
   });

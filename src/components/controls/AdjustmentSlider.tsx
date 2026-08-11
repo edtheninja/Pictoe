@@ -12,9 +12,8 @@ export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
   const valuePct = pct(value);
   const zeroPct = pct(defaultValue);
 
-
   return (
-    <div className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-md gap-y-xs py-xs sm:grid-cols-[7rem_minmax(0,1fr)_3.5rem]">
+    <div className="group grid grid-cols-[6rem_minmax(0,1fr)_3rem] items-center gap-x-sm py-[3px]">
       <label
         htmlFor={`adj-${def.key}`}
         className="min-w-0 truncate text-[13px] text-text-secondary"
@@ -25,7 +24,7 @@ export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
 
       <Slider.Root
         id={`adj-${def.key}`}
-        className="relative col-span-2 flex h-5 w-full touch-none select-none items-center sm:col-span-1"
+        className="relative col-span-1 flex h-4 w-full touch-none select-none items-center"
         min={def.min}
         max={def.max}
         step={def.step}
@@ -53,7 +52,6 @@ export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
           aria-label={def.label}
           className="block h-3.5 w-3.5 rounded-full border border-accent bg-surface-elevated shadow-subtle transition-transform duration-150 hover:scale-110 focus-visible:scale-110"
         />
-
       </Slider.Root>
 
       <div className="flex items-center justify-end gap-xs">
