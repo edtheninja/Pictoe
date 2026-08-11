@@ -52,7 +52,14 @@ export function Canvas() {
         const previewEdit = showOriginal
           ? { ...edit, adjustments: { ...DEFAULT_ADJUSTMENTS } }
           : edit;
-        renderImage(source.element, source.width, source.height, previewEdit, canvasRef.current!, maxDim);
+        renderImage(
+          source.element,
+          source.width,
+          source.height,
+          previewEdit,
+          canvasRef.current!,
+          maxDim,
+        );
       } catch {
         setError("Pictoe couldn't process this image. Try another image or check its format.");
       }
@@ -95,7 +102,6 @@ export function Canvas() {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-
   const onPointerDown = (e: React.PointerEvent) => {
     if (activeTool === "crop") return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -118,20 +124,22 @@ export function Canvas() {
   return (
     <div
       ref={containerRef}
-      className="relative flex-1 overflow-hidden checker"
+      className="relative h-full w-full overflow-hidden bg-background"
       role="region"
       aria-label="Image canvas"
     >
       <div
         className="absolute inset-0 flex items-center justify-center"
-        style={{ cursor: activeTool === "crop" ? "default" : dragRef.current ? "grabbing" : "grab" }}
+        style={{
+          cursor: activeTool === "crop" ? "default" : dragRef.current ? "grabbing" : "grab",
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
       >
         <div
-          className="relative shadow-strong"
+          className="relative shadow-strong checker"
           style={{
             width: displayW,
             height: displayH,

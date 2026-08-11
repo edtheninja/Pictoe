@@ -111,20 +111,19 @@ Advanced AI generation, magic eraser, generative expansion, complex object remov
 The main editor should follow this structure:
 
 ┌────────────────────────────────────────────────────┐
-│ Pictoe                         Undo  Redo    Export │
+│ Pictoe Undo Redo Export │
 ├────────────────────────────────────────────────────┤
-│                                                    │
-│                                                    │
-│                                                    │
-│                     IMAGE                          │
-│                                                    │
-│                                                    │
-│                                                    │
-│                                                    │
+│ │
+│ │
+│ │
+│ IMAGE │
+│ │
+│ │
+│ │
+│ │
 ├────────────────────────────────────────────────────┤
-│ Adjust │ Color │ Detail │ Crop │ Heal │ ✦ Intent  │
+│ Adjust │ Color │ Detail │ Crop │ Heal │ ✦ Intent │
 └────────────────────────────────────────────────────┘
-
 
 The canvas must receive the majority of the visual attention.
 
@@ -164,17 +163,16 @@ Use a modern sans-serif such as Inter.
 
 Suggested hierarchy:
 
-Hero       56 / 64
-H1         40 / 48
-H2         32 / 40
-H3         24 / 32
+Hero 56 / 64
+H1 40 / 48
+H2 32 / 40
+H3 24 / 32
 
 Body Large 18 / 28
-Body       16 / 24
+Body 16 / 24
 Body Small 14 / 20
 
-Label      12–14
-
+Label 12–14
 
 Typography should remain restrained inside the actual editor.
 
@@ -199,7 +197,6 @@ accent
 accent-strong
 danger
 
-
 Spacing
 
 xs
@@ -210,7 +207,6 @@ xl
 2xl
 3xl
 
-
 Radius
 
 none
@@ -220,13 +216,11 @@ lg
 xl
 full
 
-
 Elevation
 
 subtle
 medium
 strong
-
 
 The system should make future light mode possible without rewriting the application.
 
@@ -237,22 +231,21 @@ Create reusable components rather than putting the entire editor inside one comp
 Initial component structure should include:
 
 Editor
- ├── EditorHeader
- ├── Canvas
- ├── ToolDock
- │    ├── AdjustTool
- │    ├── ColorTool
- │    ├── DetailTool
- │    ├── CropTool
- │    ├── HealTool
- │    └── IntentTool
- │
- ├── AdjustmentPanel
- ├── IntentBar
- ├── CanvasControls
- ├── BeforeAfter
- └── ExportControl
-
+├── EditorHeader
+├── Canvas
+├── ToolDock
+│ ├── AdjustTool
+│ ├── ColorTool
+│ ├── DetailTool
+│ ├── CropTool
+│ ├── HealTool
+│ └── IntentTool
+│
+├── AdjustmentPanel
+├── IntentBar
+├── CanvasControls
+├── BeforeAfter
+└── ExportControl
 
 Use clean component boundaries.
 
@@ -361,39 +354,37 @@ NEVER permanently overwrite the original image during normal editing.
 Use an editing-state model similar to:
 
 Original Image
-      ↓
+↓
 Adjustment 1
-      ↓
+↓
 Adjustment 2
-      ↓
+↓
 Adjustment 3
-      ↓
+↓
 Current Preview
-
 
 Represent edits as structured state rather than destructive pixel mutations whenever practical.
 
 For example:
 
 type EditState = {
-  exposure: number;
-  brightness: number;
-  contrast: number;
-  highlights: number;
-  shadows: number;
-  whites: number;
-  blacks: number;
+exposure: number;
+brightness: number;
+contrast: number;
+highlights: number;
+shadows: number;
+whites: number;
+blacks: number;
 
-  saturation: number;
-  vibrance: number;
-  temperature: number;
-  tint: number;
+saturation: number;
+vibrance: number;
+temperature: number;
+tint: number;
 
-  sharpness: number;
-  clarity: number;
-  blur: number;
+sharpness: number;
+clarity: number;
+blur: number;
 };
-
 
 This structure can evolve later into an edit graph/history system.
 
@@ -405,7 +396,6 @@ Keyboard shortcuts:
 
 Cmd/Ctrl + Z
 Cmd/Ctrl + Shift + Z
-
 
 Do not reload or reconstruct the entire application when undoing.
 
@@ -419,7 +409,6 @@ Preferred behavior:
 
 Hold → Original
 Release → Edited
-
 
 Also provide an accessible button/control for users who cannot use the gesture.
 
@@ -436,12 +425,11 @@ For example:
 Adjust
 
 Light
-Exposure      ─────●─────
-Brightness    ───────●───
-Contrast      ─────●──────
-Highlights    ───●────────
-Shadows       ───────●────
-
+Exposure ─────●─────
+Brightness ───────●───
+Contrast ─────●──────
+Highlights ───●────────
+Shadows ───────●────
 
 When the user exits the tool, controls should collapse or disappear.
 
@@ -452,9 +440,8 @@ This is progressive disclosure.
 Create the visual foundation for Pictoe's signature interaction:
 
 ┌──────────────────────────────────────────────┐
-│ ✦  What would you like to change?            │
+│ ✦ What would you like to change? │
 └──────────────────────────────────────────────┘
-
 
 This is NOT a chatbot.
 
@@ -475,17 +462,16 @@ For the MVP, natural-language processing can be mocked or implemented with a sim
 The architecture should eventually allow an AI service to translate:
 
 User Intent
-     ↓
+↓
 Detected Region / Operation
-     ↓
+↓
 Suggested Parameters
-     ↓
+↓
 Preview
-     ↓
+↓
 User Approval
-     ↓
+↓
 Edit State
-
 
 The AI must suggest changes rather than silently modify the image.
 
@@ -517,10 +503,8 @@ Do not attempt to force computationally expensive generative operations into the
 
 However, keep the architecture ready for:
 
-Local Editing
-      +
+Local Editing +
 Optional Cloud AI
-
 
 The application should clearly distinguish between:
 
@@ -569,7 +553,6 @@ Light
 Color
 Crop
 
-
 Intermediate
 
 Expose:
@@ -582,7 +565,6 @@ Temperature
 Saturation
 Detail
 
-
 Advanced
 
 Expose:
@@ -592,7 +574,6 @@ HSL
 Masks
 Selective adjustments
 Blend modes
-
 
 Professional
 
@@ -605,7 +586,6 @@ Precision values
 Batch processing
 Edit graph
 Advanced color management
-
 
 Do NOT create artificial limitations.
 
@@ -682,7 +662,6 @@ TypeScript
 Vite
 Tailwind CSS
 
-
 Use reusable UI primitives.
 
 Separate:
@@ -695,7 +674,6 @@ Image Processing
 ↓
 Export
 
-
 Do not tightly couple image manipulation to UI components.
 
 22. State Architecture
@@ -707,9 +685,9 @@ Conceptually:
 EditorState
 ├── sourceImage
 ├── viewport
-│   ├── zoom
-│   ├── panX
-│   └── panY
+│ ├── zoom
+│ ├── panX
+│ └── panY
 │
 ├── adjustments
 ├── crop
@@ -719,7 +697,6 @@ EditorState
 ├── selectedRegion
 └── processingState
 
-
 Keep UI state separate from image-editing state wherever possible.
 
 23. File Structure
@@ -728,32 +705,31 @@ Prefer a structure similar to:
 
 src/
 ├── components/
-│   ├── editor/
-│   ├── canvas/
-│   ├── controls/
-│   └── ui/
+│ ├── editor/
+│ ├── canvas/
+│ ├── controls/
+│ └── ui/
 │
 ├── features/
-│   ├── adjustments/
-│   ├── crop/
-│   ├── color/
-│   ├── detail/
-│   ├── history/
-│   └── intent/
+│ ├── adjustments/
+│ ├── crop/
+│ ├── color/
+│ ├── detail/
+│ ├── history/
+│ └── intent/
 │
 ├── engine/
-│   ├── image/
-│   ├── transforms/
-│   └── export/
+│ ├── image/
+│ ├── transforms/
+│ └── export/
 │
 ├── state/
-│   └── editor/
+│ └── editor/
 │
 ├── hooks/
 ├── lib/
 ├── types/
 └── styles/
-
 
 Adapt this structure to Lovable's generated project where necessary, but preserve separation of concerns.
 
@@ -795,7 +771,6 @@ When no image is loaded, show a beautiful minimal state:
 
        JPG · PNG · WebP
 
-
 Do not create a dashboard before the user reaches the editor.
 
 The product's primary action is:
@@ -817,7 +792,6 @@ Quality
 ├── High
 ├── Medium
 └── Custom
-
 
 Later we can add:
 
@@ -842,7 +816,6 @@ Errors should be human-readable.
 Avoid technical messages such as:
 
 CanvasRenderingContext2D failed
-
 
 Instead:
 
