@@ -36,9 +36,9 @@ function EditorShell() {
 
       <main className="relative min-h-0 flex-1 overflow-hidden">
         <Canvas />
+        <AdjustmentPanel />
       </main>
 
-      <AdjustmentPanel />
       <ToolDock />
     </div>
   );

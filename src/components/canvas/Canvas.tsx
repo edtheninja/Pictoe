@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderImage, outputSize } from "@/engine/image/render";
 import { useEditor } from "@/state/editor/EditorContext";
-import { DEFAULT_ADJUSTMENTS } from "@/types/editor";
+import { DEFAULT_ADJUSTMENTS, DEFAULT_CROP } from "@/types/editor";
 import { CanvasControls } from "./CanvasControls";
 import { CropOverlay } from "./CropOverlay";
 
@@ -17,10 +17,13 @@ export function Canvas() {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
-  const out = useMemo(
-    () => (source ? outputSize(source.width, source.height, edit) : { width: 1, height: 1 }),
-    [source, edit],
-  );
+  const isCropping = activeTool === "crop";
+
+  const out = useMemo(() => {
+    if (!source) return { width: 1, height: 1 };
+    const sizingEdit = isCropping ? { ...edit, crop: { ...DEFAULT_CROP } } : edit;
+    return outputSize(source.width, source.height, sizingEdit);
+  }, [source, edit, isCropping]);
 
   const fitScale = useMemo(() => {
     if (!box.width || !box.height) return 1;
@@ -49,9 +52,11 @@ export function Canvas() {
           2400,
           Math.max(640, Math.max(out.width, out.height) * fitScale * viewport.zoom * dpr),
         );
-        const previewEdit = showOriginal
-          ? { ...edit, adjustments: { ...DEFAULT_ADJUSTMENTS } }
-          : edit;
+        const previewEdit = {
+          ...edit,
+          adjustments: showOriginal ? { ...DEFAULT_ADJUSTMENTS } : edit.adjustments,
+          crop: isCropping ? { ...DEFAULT_CROP } : edit.crop,
+        };
         renderImage(
           source.element,
           source.width,
@@ -67,7 +72,17 @@ export function Canvas() {
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [source, edit, showOriginal, fitScale, viewport.zoom, out.width, out.height, setError]);
+  }, [
+    source,
+    edit,
+    showOriginal,
+    isCropping,
+    fitScale,
+    viewport.zoom,
+    out.width,
+    out.height,
+    setError,
+  ]);
 
   const zoomAt = useCallback(
     (nextZoom: number, px: number, py: number) => {

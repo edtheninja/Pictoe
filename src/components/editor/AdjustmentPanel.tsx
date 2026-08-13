@@ -23,7 +23,7 @@ export function AdjustmentPanel() {
   return (
     <section
       aria-label={`${TITLES[tool]} controls`}
-      className="animate-in fade-in slide-in-from-bottom-2 border-t border-border bg-surface px-4 py-2 duration-200"
+      className="animate-in fade-in slide-in-from-bottom-4 absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-surface/95 px-4 py-3 shadow-strong backdrop-blur-md duration-200"
     >
       <header className="mb-sm grid grid-cols-[minmax(0,1fr)_auto] items-center gap-md">
         <h2 className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-text-muted">
@@ -43,7 +43,7 @@ export function AdjustmentPanel() {
         </div>
       </header>
 
-      <div className="max-h-[22vh] overflow-y-auto">
+      <div className="max-h-[32vh] overflow-y-auto">
         {tool === "adjust" && <AdjustmentGroup group="light" />}
         {tool === "color" && <AdjustmentGroup group="color" />}
         {tool === "detail" && <AdjustmentGroup group="detail" />}
