@@ -24,8 +24,7 @@ export function outputSize(srcW: number, srcH: number, edit: EditState) {
 
 function buildFilter(a: Adjustments, scale: number): string {
   const brightness = 1 + (a.exposure / 100) * 0.55 + (a.brightness / 100) * 0.4;
-  const contrast =
-    1 + (a.contrast / 100) * 0.6 + (a.clarity / 100) * 0.25 + (a.sharpness / 100) * 0.12;
+  const contrast = 1 + (a.contrast / 100) * 0.6 + (a.clarity / 100) * 0.25;
   const saturate = Math.max(0, 1 + a.saturation / 100 + (a.vibrance / 100) * 0.5);
   const blurPx = (a.blur / 100) * 24 * scale;
 
@@ -40,6 +39,43 @@ function buildFilter(a: Adjustments, scale: number): string {
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v));
+}
+
+function clampByte(v: number) {
+  return v < 0 ? 0 : v > 255 ? 255 : v;
+}
+
+/**
+ * Real unsharp-mask sharpening: blur a copy of the current canvas, then push
+ * each pixel away from its blurred neighbor. Operates on whatever's already
+ * been drawn, so it runs after the base image and tone layers are composited.
+ */
+function sharpen(ctx: Ctx2D, target: RenderTarget, w: number, h: number, amount: number) {
+  if (amount <= 0) return;
+
+  const original = ctx.getImageData(0, 0, w, h);
+
+  const blurCanvas = document.createElement("canvas");
+  blurCanvas.width = w;
+  blurCanvas.height = h;
+  const blurCtx = blurCanvas.getContext("2d") as CanvasRenderingContext2D | null;
+  if (!blurCtx) return;
+
+  const radius = 1 + (amount / 100) * 3;
+  blurCtx.filter = `blur(${radius.toFixed(2)}px)`;
+  blurCtx.drawImage(target as CanvasImageSource, 0, 0, w, h);
+  const blurred = blurCtx.getImageData(0, 0, w, h);
+
+  const strength = (amount / 100) * 1.4;
+  const o = original.data;
+  const b = blurred.data;
+  for (let i = 0; i < o.length; i += 4) {
+    o[i] = clampByte(o[i]! + strength * (o[i]! - b[i]!));
+    o[i + 1] = clampByte(o[i + 1]! + strength * (o[i + 1]! - b[i + 1]!));
+    o[i + 2] = clampByte(o[i + 2]! + strength * (o[i + 2]! - b[i + 2]!));
+  }
+
+  ctx.putImageData(original, 0, 0);
 }
 
 function tone(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
@@ -123,6 +159,8 @@ export function renderImage(
   ctx.filter = "none";
   tone(ctx, w, h, edit.adjustments);
   ctx.restore();
+
+  sharpen(ctx, target, w, h, edit.adjustments.sharpness);
 
   return { width: w, height: h };
 }
