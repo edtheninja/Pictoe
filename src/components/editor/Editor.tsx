@@ -34,8 +34,10 @@ function EditorShell() {
         </div>
       )}
 
-      <main className="relative min-h-0 flex-1 overflow-hidden">
-        <Canvas />
+      <main className="relative min-h-0 flex-1 overflow-hidden lg:flex">
+        <div className="relative h-full min-w-0 overflow-hidden lg:flex-1">
+          <Canvas />
+        </div>
         <AdjustmentPanel />
       </main>
 

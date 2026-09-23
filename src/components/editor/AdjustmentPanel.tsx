@@ -23,9 +23,9 @@ export function AdjustmentPanel() {
   return (
     <section
       aria-label={`${TITLES[tool]} controls`}
-      className="animate-in fade-in slide-in-from-bottom-4 absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-surface/95 px-4 py-3 shadow-strong backdrop-blur-md duration-200"
+      className="animate-in fade-in slide-in-from-bottom-4 lg:slide-in-from-bottom-0 lg:slide-in-from-right-4 absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-surface/95 px-4 py-3 shadow-strong backdrop-blur-md duration-200 lg:static lg:inset-auto lg:flex lg:h-full lg:w-[360px] lg:shrink-0 lg:flex-col lg:rounded-none lg:border-l lg:border-t-0 lg:px-5 lg:py-4"
     >
-      <header className="mb-sm grid grid-cols-[minmax(0,1fr)_auto] items-center gap-md">
+      <header className="mb-sm grid shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-md">
         <h2 className="truncate text-[11px] font-medium uppercase tracking-[0.14em] text-text-muted">
           {TITLES[tool]}
         </h2>
@@ -43,7 +43,7 @@ export function AdjustmentPanel() {
         </div>
       </header>
 
-      <div className="max-h-[32vh] overflow-y-auto">
+      <div className="max-h-[32vh] overflow-y-auto lg:max-h-none lg:flex-1">
         {tool === "adjust" && <AdjustmentGroup group="light" />}
         {tool === "color" && <AdjustmentGroup group="color" />}
         {tool === "detail" && <AdjustmentGroup group="detail" />}

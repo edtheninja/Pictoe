@@ -39,7 +39,7 @@ export function CropTool() {
     applyEdit({ rotation: (edit.rotation + delta + 360) % 360, crop: { ...DEFAULT_CROP } });
 
   return (
-    <div className="flex flex-wrap items-center gap-md">
+    <div className="flex flex-wrap items-center gap-md lg:flex-col lg:items-stretch lg:gap-sm">
       <div className="flex flex-wrap items-center gap-xs">
         {RATIOS.map((r) => (
           <button
@@ -52,7 +52,7 @@ export function CropTool() {
           </button>
         ))}
       </div>
-      <div className="h-5 w-px bg-border" />
+      <div className="h-5 w-px bg-border lg:h-px lg:w-full" />
       <div className="flex items-center gap-xs">
         <button
           type="button"
@@ -75,9 +75,7 @@ export function CropTool() {
           aria-label="Flip horizontally"
           aria-pressed={edit.flipH}
           onClick={() => applyEdit({ flipH: !edit.flipH })}
-          className={`grid h-8 w-8 place-items-center rounded-md transition-colors duration-150 hover:bg-surface-elevated ${
-            edit.flipH ? "text-accent" : "text-text-secondary hover:text-text-primary"
-          }`}
+          className={`grid h-8 w-8 place-items-center rounded-md transition-colors duration-150 hover:bg-surface-elevated ${edit.flipH ? "text-accent" : "text-text-secondary hover:text-text-primary"}`}
         >
           <FlipHorizontal className="h-4 w-4" />
         </button>
