@@ -72,11 +72,7 @@ export function ExportControl() {
                 type="button"
                 onClick={() => setFormat(f.value)}
                 aria-pressed={format === f.value}
-                className={`flex-1 rounded-md border px-sm py-1.5 text-[12px] transition-colors duration-150 ${
-                  format === f.value
-                    ? "border-accent text-accent"
-                    : "border-border text-text-secondary hover:text-text-primary"
-                }`}
+                className={`flex-1 rounded-md border px-sm py-1.5 text-[12px] transition-colors duration-150 ${format === f.value ? "border-accent text-accent" : "border-border text-text-secondary hover:text-text-primary"}`}
               >
                 {f.label}
               </button>
@@ -99,11 +95,7 @@ export function ExportControl() {
                     type="button"
                     onClick={() => setQuality(q.value)}
                     aria-pressed={quality === q.value}
-                    className={`flex-1 rounded-md border px-sm py-1.5 text-[12px] transition-colors duration-150 ${
-                      quality === q.value
-                        ? "border-accent text-accent"
-                        : "border-border text-text-secondary hover:text-text-primary"
-                    }`}
+                    className={`flex-1 rounded-md border px-sm py-1.5 text-[12px] transition-colors duration-150 ${quality === q.value ? "border-accent text-accent" : "border-border text-text-secondary hover:text-text-primary"}`}
                   >
                     {q.label}
                   </button>

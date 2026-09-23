@@ -44,7 +44,7 @@ export type SourceImage = {
 export type ProcessingState = "idle" | "rendering" | "exporting" | "error";
 
 export type ExportFormat = "image/jpeg" | "image/png" | "image/webp";
-export type ExportQuality = "high" | "medium" | "custom";
+export type ExportQuality = "high" | "medium" | "small" | "custom";
 
 export const DEFAULT_ADJUSTMENTS: Adjustments = {
   exposure: 0,
