@@ -8,11 +8,13 @@ export function ImportScreen() {
 
   const [dragging, setDragging] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleFile = async (file?: File | null) => {
-    if (!file) return;
+    if (!file || isLoading) return;
 
     setMessage(null);
+    setIsLoading(true);
 
     try {
       const image = await loadImageFile(file);
@@ -24,9 +26,10 @@ export function ImportScreen() {
           ? err.message
           : "Pictoe couldn't process this image. Try another image or check its format.",
       );
+    } finally {
+      setIsLoading(false);
     }
   };
-
   return (
     <main className="flex min-h-screen w-full items-center justify-center bg-canvas px-8 py-16">
       <div className="flex w-full max-w-5xl flex-col items-start gap-16 lg:flex-row lg:items-center lg:gap-20">
@@ -57,41 +60,39 @@ export function ImportScreen() {
         <div className="w-full lg:w-1/2">
           <button
             type="button"
+            disabled={isLoading}
             onClick={() => inputRef.current?.click()}
             onDragEnter={(event) => {
               event.preventDefault();
-              setDragging(true);
+              if (!isLoading) setDragging(true);
             }}
             onDragOver={(event) => {
               event.preventDefault();
-              setDragging(true);
+              if (!isLoading) setDragging(true);
             }}
             onDragLeave={(event) => {
               event.preventDefault();
-
-              if (event.currentTarget === event.target) {
-                setDragging(false);
-              }
+              if (event.currentTarget === event.target) setDragging(false);
             }}
             onDrop={(event) => {
               event.preventDefault();
               setDragging(false);
-
               void handleFile(event.dataTransfer.files?.[0]);
             }}
             className={[
               "group flex w-full flex-col items-center justify-center",
-              "aspect-square rounded-2xl border border-dashed",
+              "aspect-[4/3] max-h-[420px] rounded-2xl border border-dashed lg:aspect-square lg:max-h-none",
               "text-center transition-all duration-200",
               "focus-visible:outline-none focus-visible:ring-2",
               "focus-visible:ring-accent focus-visible:ring-offset-4",
+              "disabled:cursor-not-allowed disabled:opacity-70",
               dragging
                 ? "scale-[1.01] border-accent bg-accent/10"
                 : "border-border bg-surface/20 hover:border-text-muted hover:bg-surface/40",
             ].join(" ")}
             aria-label="Choose an image or drop one here"
+            aria-busy={isLoading}
           >
-            {/* Minimal + mark */}
             <span
               className={[
                 "flex h-16 w-16 items-center justify-center rounded-full",
@@ -106,20 +107,19 @@ export function ImportScreen() {
             </span>
 
             <p className="mt-8 text-lg font-medium text-text-primary">
-              {dragging ? "Release to open your image" : "Choose an image"}
+              {isLoading
+                ? "Preparing your image…"
+                : dragging
+                  ? "Release to open your image"
+                  : "Choose an image"}
             </p>
 
-            <p className="mt-2 text-sm text-text-secondary">or drop it here</p>
+            <p className="mt-2 text-sm text-text-secondary">
+              {isLoading ? "This won't take long" : "or drop it here"}
+            </p>
 
-            <span
-              className="
-                mt-8 inline-flex h-11 items-center justify-center
-                rounded-xl bg-accent px-7 text-sm font-medium
-                text-accent-foreground transition-colors duration-150
-                group-hover:bg-accent-strong
-              "
-            >
-              Choose image
+            <span className="mt-8 inline-flex h-11 items-center justify-center rounded-xl bg-accent px-7 text-sm font-medium text-accent-foreground transition-colors duration-150 group-hover:bg-accent-strong">
+              {isLoading ? "Loading…" : "Choose image"}
             </span>
           </button>
 
