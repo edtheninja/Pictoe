@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useMemo, useReducer, useRef } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+} from "react";
 import type { ReactNode } from "react";
 import {
   DEFAULT_ADJUSTMENTS,
@@ -14,6 +22,7 @@ import {
   type Viewport,
 } from "@/types/editor";
 import { analyzeImage } from "@/engine/image/analyze";
+import { saveSession, loadSession, clearSession } from "@/engine/storage/session";
 
 type State = {
   source: SourceImage | null;
@@ -43,6 +52,7 @@ const initialState: State = {
 
 type Action =
   | { type: "setSource"; source: SourceImage; analysis: ImageAnalysis }
+  | { type: "restoreSession"; source: SourceImage; analysis: ImageAnalysis; edit: EditState }
   | { type: "closeImage" }
   | { type: "setAdjustment"; key: AdjustmentKey; value: number }
   | { type: "commit"; snapshot: EditState }
@@ -71,6 +81,14 @@ function reducer(state: State, action: Action): State {
         ...initialState,
         source: action.source,
         analysis: action.analysis,
+        activeTool: "adjust",
+      };
+    case "restoreSession":
+      return {
+        ...initialState,
+        source: action.source,
+        analysis: action.analysis,
+        edit: action.edit,
         activeTool: "adjust",
       };
     case "closeImage":
@@ -204,6 +222,61 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Restore a saved session once, on mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const saved = await loadSession();
+      if (!saved || cancelled) return;
+      const url = URL.createObjectURL(saved.imageBlob);
+      try {
+        const element = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("restore failed"));
+          img.src = url;
+        });
+        if (cancelled) return;
+        const source: SourceImage = {
+          element,
+          width: element.naturalWidth,
+          height: element.naturalHeight,
+          name: saved.name,
+          type: saved.type,
+          blob: saved.imageBlob,
+        };
+        dispatch({
+          type: "restoreSession",
+          source,
+          analysis: analyzeImage(element),
+          edit: saved.edit,
+        });
+      } catch {
+        // Corrupt/unreadable saved session — fall back to the empty state
+        // rather than block the app.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Autosave, debounced — avoids writing to IndexedDB on every slider frame.
+  const saveTimeoutRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!state.source) return;
+    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = window.setTimeout(() => {
+      saveSession({
+        imageBlob: state.source!.blob,
+        name: state.source!.name,
+        type: state.source!.type,
+        edit: state.edit,
+      });
+    }, 800);
+    return () => window.clearTimeout(saveTimeoutRef.current);
+  }, [state.source, state.edit]);
+
   const api = useMemo<EditorApi>(
     () => ({
       state,
@@ -212,7 +285,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       isEdited: JSON.stringify(state.edit) !== JSON.stringify(DEFAULT_EDIT_STATE),
       setSource: (source) =>
         dispatch({ type: "setSource", source, analysis: analyzeImage(source.element) }),
-      closeImage: () => dispatch({ type: "closeImage" }),
+      closeImage: () => {
+        dispatch({ type: "closeImage" });
+        clearSession();
+      },
       setAdjustment: (key, value) => dispatch({ type: "setAdjustment", key, value }),
       beginInteraction,
       endInteraction,

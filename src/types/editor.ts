@@ -39,6 +39,7 @@ export type SourceImage = {
   height: number;
   name: string;
   type: string;
+  blob: Blob; // ← add this line — the original file, kept for session persistence
 };
 
 export type ProcessingState = "idle" | "rendering" | "exporting" | "error";

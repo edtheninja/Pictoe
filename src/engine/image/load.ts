@@ -30,6 +30,7 @@ export async function loadImageFile(file: File): Promise<SourceImage> {
       height: element.naturalHeight,
       name: file.name,
       type: file.type,
+      blob: file, //File extends Blob, so this is free - just threading it through
     };
   } catch (err) {
     URL.revokeObjectURL(url);
