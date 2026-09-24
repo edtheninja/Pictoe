@@ -158,6 +158,8 @@ type EditorApi = {
   beginInteraction: () => void;
   /** call on drag end to record the snapshot in history */
   endInteraction: () => void;
+  /** call to abandon a beginInteraction() without recording history */
+  cancelInteraction: () => void;
   resetAdjustment: (key: AdjustmentKey) => void;
   resetAll: () => void;
   applyEdit: (edit: Partial<EditState>) => void;
@@ -190,6 +192,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const cancelInteraction = useCallback(() => {
+    if (snapshotRef.current) {
+      dispatch({ type: "applyEdit", edit: snapshotRef.current, commit: false });
+      snapshotRef.current = null;
+    }
+  }, []);
+
   const api = useMemo<EditorApi>(
     () => ({
       state,
@@ -201,6 +210,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setAdjustment: (key, value) => dispatch({ type: "setAdjustment", key, value }),
       beginInteraction,
       endInteraction,
+      cancelInteraction,
       resetAdjustment: (key) => dispatch({ type: "resetAdjustment", key }),
       resetAll: () => dispatch({ type: "resetAll" }),
       applyEdit: (edit) => dispatch({ type: "applyEdit", edit }),
@@ -219,7 +229,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setError: (error) => dispatch({ type: "setError", error }),
       setShowOriginal: (value) => dispatch({ type: "setShowOriginal", value }),
     }),
-    [state, beginInteraction, endInteraction],
+    [state, beginInteraction, endInteraction, cancelInteraction],
   );
 
   return <EditorContext.Provider value={api}>{children}</EditorContext.Provider>;
