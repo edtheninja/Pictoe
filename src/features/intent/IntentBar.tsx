@@ -1,13 +1,14 @@
 import { Sparkles, WifiOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { parseIntent, type IntentSuggestion } from "./parseIntent";
+import { parseIntent, analysisSuggestion, type IntentSuggestion } from "./parseIntent";
 import { useEditor } from "@/state/editor/EditorContext";
 import type { AdjustmentKey } from "@/types/editor";
 
 const EXAMPLES = ["Make the sky dramatic", "Warm the image slightly", "Make the subject stand out"];
 
 export function IntentBar() {
-  const { setAdjustment, beginInteraction, endInteraction, cancelInteraction } = useEditor();
+  const { state, isEdited, setAdjustment, beginInteraction, endInteraction, cancelInteraction } =
+    useEditor();
   const [value, setValue] = useState("");
   const [suggestions, setSuggestions] = useState<IntentSuggestion[] | null>(null);
   const [cloudOnly, setCloudOnly] = useState<{ label: string; description: string } | null>(null);
@@ -23,12 +24,22 @@ export function IntentBar() {
     };
   }, [cancelInteraction]);
 
+  // Proactively suggest a fix based on the image itself, before the user
+  // types anything — but only if nothing's been edited yet, so this doesn't
+  // keep nagging after the user has already acted (including via this exact
+  // suggestion).
+  useEffect(() => {
+    if (!state.analysis || isEdited) return;
+    const auto = analysisSuggestion(state.analysis);
+    if (auto) setSuggestions([auto]);
+  }, [state.analysis, isEdited]);
+
   const run = (text: string) => {
     if (previewing) {
       cancelInteraction();
       setPreviewing(null);
     }
-    const result = parseIntent(text);
+    const result = parseIntent(text, state.analysis);
     setSuggestions(result.suggestions);
     setCloudOnly(result.cloudOnly);
   };

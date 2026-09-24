@@ -1,4 +1,4 @@
-import type { AdjustmentKey } from "@/types/editor";
+import type { AdjustmentKey, ImageAnalysis } from "@/types/editor";
 
 export type IntentSuggestion = {
   label: string;
@@ -9,9 +9,28 @@ export type IntentSuggestion = {
 
 type Rule = {
   match: RegExp;
-  build: (intensity: number) => IntentSuggestion;
-  cloud?: boolean;
+  build: (intensity: number, analysis: ImageAnalysis | null) => IntentSuggestion;
 };
+
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
+/** Scales a correction's strength by how far the image already is from
+ *  "normal" in the relevant direction — e.g. a genuinely dark photo gets a
+ *  stronger brighten than one that's already close to well-exposed. */
+function exposureFactor(analysis: ImageAnalysis | null, direction: "up" | "down") {
+  if (!analysis) return 1;
+  const delta = 128 - analysis.avgLuminance; // positive = image is dark
+  const signed = direction === "up" ? delta : -delta;
+  return clamp(1 + signed / 160, 0.4, 1.8);
+}
+
+function warmthFactor(analysis: ImageAnalysis | null, direction: "warm" | "cool") {
+  if (!analysis) return 1;
+  const signed = direction === "warm" ? -analysis.warmthBias : analysis.warmthBias;
+  return clamp(1 + signed * 1.4, 0.4, 1.6);
+}
 
 /**
  * Local, deterministic intent parser. It never applies anything on its own —
@@ -21,42 +40,56 @@ type Rule = {
 const RULES: Rule[] = [
   {
     match: /(bright|lighter|light it|too dark|expose)/i,
-    build: (i) => ({
-      label: "Brighten",
-      description: "Lifts exposure and opens the shadows.",
-      patch: { exposure: 18 * i, shadows: 15 * i },
-    }),
+    build: (i, analysis) => {
+      const f = i * exposureFactor(analysis, "up");
+      return {
+        label: "Brighten",
+        description: "Lifts exposure and opens the shadows.",
+        patch: { exposure: 18 * f, shadows: 15 * f },
+      };
+    },
   },
   {
     match: /(dark(er)?|moody|dim)/i,
-    build: (i) => ({
-      label: "Darken",
-      description: "Pulls exposure down and deepens the blacks.",
-      patch: { exposure: -16 * i, blacks: -12 * i },
-    }),
+    build: (i, analysis) => {
+      const f = i * exposureFactor(analysis, "down");
+      return {
+        label: "Darken",
+        description: "Pulls exposure down and deepens the blacks.",
+        patch: { exposure: -16 * f, blacks: -12 * f },
+      };
+    },
   },
   {
     match: /(dramatic|punch|contrast|sky)/i,
-    build: (i) => ({
-      label: "Add drama",
-      description: "Stronger contrast, recovered highlights, deeper clarity.",
-      patch: { contrast: 25 * i, highlights: -30 * i, clarity: 22 * i, blacks: -12 * i },
-    }),
+    build: (i, analysis) => {
+      const highlightBoost = analysis ? clamp(1 + analysis.highlightClipPct * 6, 1, 2.2) : 1;
+      return {
+        label: "Add drama",
+        description: "Stronger contrast, recovered highlights, deeper clarity.",
+        patch: {
+          contrast: 25 * i,
+          highlights: -30 * i * highlightBoost,
+          clarity: 22 * i,
+          blacks: -12 * i,
+        },
+      };
+    },
   },
   {
     match: /(warm|golden|sunset|cozy)/i,
-    build: (i) => ({
+    build: (i, analysis) => ({
       label: "Warm it up",
       description: "Shifts white balance towards golden tones.",
-      patch: { temperature: 28 * i },
+      patch: { temperature: 28 * i * warmthFactor(analysis, "warm") },
     }),
   },
   {
     match: /(cool|cold|blue|icy)/i,
-    build: (i) => ({
+    build: (i, analysis) => ({
       label: "Cool it down",
       description: "Shifts white balance towards blue.",
-      patch: { temperature: -28 * i },
+      patch: { temperature: -28 * i * warmthFactor(analysis, "cool") },
     }),
   },
   {
@@ -130,7 +163,10 @@ function intensityOf(text: string) {
   return 1;
 }
 
-export function parseIntent(input: string): {
+export function parseIntent(
+  input: string,
+  analysis: ImageAnalysis | null = null,
+): {
   suggestions: IntentSuggestion[];
   cloudOnly: { label: string; description: string } | null;
 } {
@@ -143,7 +179,7 @@ export function parseIntent(input: string): {
 
   const i = intensityOf(text);
   const suggestions = RULES.filter((r) => r.match.test(text)).map((r) => {
-    const s = r.build(i);
+    const s = r.build(i, analysis);
     return {
       ...s,
       patch: Object.fromEntries(
@@ -156,4 +192,27 @@ export function parseIntent(input: string): {
   });
 
   return { suggestions: suggestions.slice(0, 3), cloudOnly: null };
+}
+
+/**
+ * Proactive suggestion generated purely from image analysis, with no text
+ * input — surfaced automatically when a genuinely under/overexposed image
+ * loads. Returns null when the image looks reasonably well-exposed.
+ */
+export function analysisSuggestion(analysis: ImageAnalysis): IntentSuggestion | null {
+  if (analysis.shadowClipPct > 0.35 || analysis.avgLuminance < 55) {
+    return {
+      label: "Brighten",
+      description: "This looks a little dark — lift the exposure and open the shadows.",
+      patch: { exposure: 22, shadows: 20 },
+    };
+  }
+  if (analysis.highlightClipPct > 0.12 || analysis.avgLuminance > 205) {
+    return {
+      label: "Recover highlights",
+      description: "Some areas look blown out — pull the highlights back.",
+      patch: { highlights: -35, exposure: -8 },
+    };
+  }
+  return null;
 }
