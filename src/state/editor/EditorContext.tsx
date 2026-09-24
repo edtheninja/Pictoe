@@ -7,11 +7,13 @@ import {
   type AdjustmentKey,
   type CropRect,
   type EditState,
+  type ImageAnalysis,
   type ProcessingState,
   type SourceImage,
   type ToolId,
   type Viewport,
 } from "@/types/editor";
+import { analyzeImage } from "@/engine/image/analyze";
 
 type State = {
   source: SourceImage | null;
@@ -23,6 +25,7 @@ type State = {
   processing: ProcessingState;
   error: string | null;
   showOriginal: boolean;
+  analysis: ImageAnalysis | null;
 };
 
 const initialState: State = {
@@ -35,10 +38,11 @@ const initialState: State = {
   processing: "idle",
   error: null,
   showOriginal: false,
+  analysis: null,
 };
 
 type Action =
-  | { type: "setSource"; source: SourceImage }
+  | { type: "setSource"; source: SourceImage; analysis: ImageAnalysis }
   | { type: "closeImage" }
   | { type: "setAdjustment"; key: AdjustmentKey; value: number }
   | { type: "commit"; snapshot: EditState }
@@ -66,6 +70,7 @@ function reducer(state: State, action: Action): State {
       return {
         ...initialState,
         source: action.source,
+        analysis: action.analysis,
         activeTool: "adjust",
       };
     case "closeImage":
@@ -150,7 +155,7 @@ type EditorApi = {
   canUndo: boolean;
   canRedo: boolean;
   isEdited: boolean;
-  setSource: (s: SourceImage) => void;
+  setSource: (source: SourceImage) => void;
   closeImage: () => void;
   /** live drag: updates value without touching history */
   setAdjustment: (key: AdjustmentKey, value: number) => void;
@@ -205,7 +210,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       canUndo: state.past.length > 0,
       canRedo: state.future.length > 0,
       isEdited: JSON.stringify(state.edit) !== JSON.stringify(DEFAULT_EDIT_STATE),
-      setSource: (source) => dispatch({ type: "setSource", source }),
+      setSource: (source) =>
+        dispatch({ type: "setSource", source, analysis: analyzeImage(source.element) }),
       closeImage: () => dispatch({ type: "closeImage" }),
       setAdjustment: (key, value) => dispatch({ type: "setAdjustment", key, value }),
       beginInteraction,

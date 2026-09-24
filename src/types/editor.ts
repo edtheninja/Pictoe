@@ -197,3 +197,11 @@ export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
   },
   { key: "blur", label: "Blur", min: 0, max: 100, step: 1, group: "detail", level: "advanced" },
 ];
+
+export type ImageAnalysis = {
+  avgLuminance: number; // 0–255
+  shadowClipPct: number; // 0–1, fraction of sampled pixels crushed to near-black
+  highlightClipPct: number; // 0–1, fraction of sampled pixels blown to near-white
+  contrastRange: number; // 0–255, max minus min luminance in the sample
+  warmthBias: number; // -1 (cool) .. 1 (warm), based on avg R−B
+};
