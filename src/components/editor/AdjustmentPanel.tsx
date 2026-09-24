@@ -3,6 +3,7 @@ import { useEditor } from "@/state/editor/EditorContext";
 import { AdjustmentGroup } from "@/features/adjustments/AdjustmentGroup";
 import { CropTool } from "@/features/crop/CropTool";
 import { IntentBar } from "@/features/intent/IntentBar";
+import { PresetsPanel } from "@/features/presets/PresetsPanel";
 import { BeforeAfter } from "./BeforeAfter";
 
 const TITLES: Record<string, string> = {
@@ -12,6 +13,7 @@ const TITLES: Record<string, string> = {
   crop: "Crop & rotate",
   heal: "Heal",
   intent: "Intent",
+  presets: "Presets",
 };
 
 /** Contextual panel — only visible while a tool is active. */
@@ -49,6 +51,7 @@ export function AdjustmentPanel() {
         {tool === "detail" && <AdjustmentGroup group="detail" />}
         {tool === "crop" && <CropTool />}
         {tool === "intent" && <IntentBar />}
+        {tool === "presets" && <PresetsPanel />}
         {tool === "heal" && (
           <div className="flex items-start gap-sm text-[13px] text-text-secondary">
             <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />

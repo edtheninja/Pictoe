@@ -31,7 +31,7 @@ export type EditState = {
 
 export type Viewport = { zoom: number; panX: number; panY: number };
 
-export type ToolId = "adjust" | "color" | "detail" | "crop" | "heal" | "intent";
+export type ToolId = "adjust" | "color" | "detail" | "crop" | "heal" | "intent" | "presets";
 
 export type SourceImage = {
   element: HTMLImageElement;
@@ -46,6 +46,15 @@ export type ProcessingState = "idle" | "rendering" | "exporting" | "error";
 
 export type ExportFormat = "image/jpeg" | "image/png" | "image/webp";
 export type ExportQuality = "high" | "medium" | "small" | "custom";
+
+export type PresetAdjustments = Partial<Record<AdjustmentKey, number>>;
+
+export type Preset = {
+  id: string;
+  name: string;
+  adjustments: PresetAdjustments;
+  builtin?: boolean;
+};
 
 export const DEFAULT_ADJUSTMENTS: Adjustments = {
   exposure: 0,
