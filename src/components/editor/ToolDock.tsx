@@ -28,10 +28,11 @@ export function ToolDock() {
             type="button"
             onClick={() => setTool(id)}
             aria-pressed={active}
-            className={`flex shrink-0 items-center gap-sm rounded-md px-md py-2 text-[13px] transition-colors duration-150 ${active
+            className={`flex shrink-0 items-center gap-sm rounded-md px-md py-2 text-[13px] transition-colors duration-150 ${
+              active
                 ? "bg-surface-elevated text-text-primary"
                 : "text-text-muted hover:bg-surface-elevated/60 hover:text-text-secondary"
-              }`}
+            }`}
           >
             <Icon className={`h-4 w-4 ${id === "intent" ? "text-accent" : ""}`} />
             <span>{label}</span>

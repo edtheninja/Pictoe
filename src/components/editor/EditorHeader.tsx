@@ -1,6 +1,7 @@
 import { ArrowLeft, Redo2, Undo2 } from "lucide-react";
 import { useEditor } from "@/state/editor/EditorContext";
 import { ExportControl } from "@/components/editor/ExportControl";
+import { HistoryPanel } from "@/components/editor/HistoryPanel";
 
 export function EditorHeader() {
   const { state, undo, redo, closeImage, canUndo, canRedo } = useEditor();
@@ -41,6 +42,8 @@ export function EditorHeader() {
         >
           <Redo2 className="h-4 w-4" />
         </button>
+
+        <HistoryPanel />
 
         <ExportControl />
       </div>

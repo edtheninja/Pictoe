@@ -61,6 +61,7 @@ type Action =
   | { type: "resetAll" }
   | { type: "undo" }
   | { type: "redo" }
+  | { type: "jumpTo"; index: number }
   | { type: "setViewport"; viewport: Partial<Viewport> }
   | { type: "setTool"; tool: ToolId | null }
   | { type: "setProcessing"; processing: ProcessingState }
@@ -153,6 +154,20 @@ function reducer(state: State, action: Action): State {
         future: state.future.slice(1),
       };
     }
+    case "jumpTo": {
+      // Combine past + current + future into one timeline, then rebuild
+      // past/future around whichever index was clicked — works the same
+      // whether jumping backward into past or forward into future.
+      const timeline = [...state.past, state.edit, ...state.future];
+      const clamped = Math.max(0, Math.min(action.index, timeline.length - 1));
+      if (clamped === state.past.length) return state; // already there
+      return {
+        ...state,
+        edit: timeline[clamped]!,
+        past: timeline.slice(0, clamped),
+        future: timeline.slice(clamped + 1),
+      };
+    }
     case "setViewport":
       return { ...state, viewport: { ...state.viewport, ...action.viewport } };
     case "setTool":
@@ -189,6 +204,8 @@ type EditorApi = {
   applyAdjustments: (patch: Partial<Record<AdjustmentKey, number>>) => void;
   undo: () => void;
   redo: () => void;
+  /** jump directly to any point in the combined past/current/future timeline */
+  jumpToHistory: (index: number) => void;
   setViewport: (v: Partial<Viewport>) => void;
   setTool: (t: ToolId | null) => void;
   setProcessing: (p: ProcessingState) => void;
@@ -305,6 +322,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         }),
       undo: () => dispatch({ type: "undo" }),
       redo: () => dispatch({ type: "redo" }),
+      jumpToHistory: (index) => dispatch({ type: "jumpTo", index }),
       setViewport: (viewport) => dispatch({ type: "setViewport", viewport }),
       setTool: (tool) => dispatch({ type: "setTool", tool }),
       setProcessing: (processing) => dispatch({ type: "setProcessing", processing }),
