@@ -108,6 +108,103 @@ function tone(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
   layer("#54ff3c", (Math.max(0, -a.tint) / 100) * 0.25, "soft-light");
 }
 
+const HUE_BAND_CENTERS: Partial<Record<keyof Adjustments, number>> = {
+  satRed: 0,
+  satOrange: 30,
+  satYellow: 60,
+  satGreen: 120,
+  satBlue: 210,
+  satPurple: 280,
+};
+
+const HUE_BAND_HALF_WIDTH = 45; // degrees of influence on each side of a band's center
+
+function hueDistance(a: number, b: number): number {
+  const d = Math.abs(a - b) % 360;
+  return d > 180 ? 360 - d : d;
+}
+
+function rgbToHsl(r: number, g: number, b: number) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return { h: 0, s: 0, l };
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60;
+  else if (max === gn) h = ((bn - rn) / d + 2) * 60;
+  else h = ((rn - gn) / d + 4) * 60;
+  return { h, s, l };
+}
+
+function hslToRgb(h: number, s: number, l: number) {
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return { r: v, g: v, b: v };
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const hk = h / 360;
+  const hue2rgb = (t: number) => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  return {
+    r: Math.round(hue2rgb(hk + 1 / 3) * 255),
+    g: Math.round(hue2rgb(hk) * 255),
+    b: Math.round(hue2rgb(hk - 1 / 3) * 255),
+  };
+}
+
+/**
+ * Per-color-band saturation: a smooth cosine falloff around each band's hue
+ * center, same approximation spirit as tone()'s highlights/shadows — not a
+ * true hue mask. Multiplicative, not additive, so already-gray pixels
+ * (s ≈ 0) are left alone rather than gaining false color.
+ */
+function applyColorBandSaturation(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
+  const bands = Object.entries(HUE_BAND_CENTERS) as [keyof Adjustments, number][];
+  const active = bands.filter(([key]) => Math.abs(a[key]) > 0.5);
+  if (active.length === 0) return;
+
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const d = imageData.data;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i]!;
+    const g = d[i + 1]!;
+    const bch = d[i + 2]!;
+    const { h: hue, s, l } = rgbToHsl(r, g, bch);
+    if (s < 0.02) continue;
+
+    let delta = 0;
+    for (const [key, center] of active) {
+      const dist = hueDistance(hue, center);
+      if (dist >= HUE_BAND_HALF_WIDTH) continue;
+      const weight = Math.cos((dist / HUE_BAND_HALF_WIDTH) * (Math.PI / 2));
+      delta += weight * a[key];
+    }
+    if (delta === 0) continue;
+
+    const newS = clamp(s * (1 + delta / 100), 0, 1);
+    const { r: nr, g: ng, b: nb } = hslToRgb(hue, newS, l);
+    d[i] = nr;
+    d[i + 1] = ng;
+    d[i + 2] = nb;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
 /**
  * Renders the source image through the edit state onto `target`.
  * `maxDimension` downscales for fast interactive previews; omit for export quality.
@@ -159,6 +256,8 @@ export function renderImage(
   ctx.filter = "none";
   tone(ctx, w, h, edit.adjustments);
   ctx.restore();
+
+  applyColorBandSaturation(ctx, w, h, edit.adjustments);
 
   sharpen(ctx, target, w, h, edit.adjustments.sharpness);
 

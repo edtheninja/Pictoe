@@ -15,6 +15,12 @@ export type Adjustments = {
   sharpness: number;
   clarity: number;
   blur: number;
+  satRed: number;
+  satOrange: number;
+  satYellow: number;
+  satGreen: number;
+  satBlue: number;
+  satPurple: number;
 };
 
 export type AdjustmentKey = keyof Adjustments;
@@ -71,6 +77,12 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
   sharpness: 0,
   clarity: 0,
   blur: 0,
+  satRed: 0,
+  satOrange: 0,
+  satYellow: 0,
+  satGreen: 0,
+  satBlue: 0,
+  satPurple: 0,
 };
 
 export const DEFAULT_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1 };
@@ -206,6 +218,52 @@ export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
     level: "basic",
   },
   { key: "blur", label: "Blur", min: 0, max: 100, step: 1, group: "detail", level: "advanced" },
+  { key: "satRed", label: "Red", min: -100, max: 100, step: 1, group: "color", level: "advanced" },
+  {
+    key: "satOrange",
+    label: "Orange",
+    min: -100,
+    max: 100,
+    step: 1,
+    group: "color",
+    level: "advanced",
+  },
+  {
+    key: "satYellow",
+    label: "Yellow",
+    min: -100,
+    max: 100,
+    step: 1,
+    group: "color",
+    level: "advanced",
+  },
+  {
+    key: "satGreen",
+    label: "Green",
+    min: -100,
+    max: 100,
+    step: 1,
+    group: "color",
+    level: "advanced",
+  },
+  {
+    key: "satBlue",
+    label: "Blue",
+    min: -100,
+    max: 100,
+    step: 1,
+    group: "color",
+    level: "advanced",
+  },
+  {
+    key: "satPurple",
+    label: "Purple",
+    min: -100,
+    max: 100,
+    step: 1,
+    group: "color",
+    level: "advanced",
+  },
 ];
 
 export type ImageAnalysis = {
