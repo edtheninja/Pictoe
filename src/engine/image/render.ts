@@ -1,4 +1,4 @@
-import type { Adjustments, EditState } from "@/types/editor";
+import type { EditState, MaskLayer, Adjustments } from "@/types/editor";
 
 /**
  * Pure rendering engine. Knows nothing about React.
@@ -89,19 +89,16 @@ function tone(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
     ctx.restore();
   };
 
-  // Highlights / whites lift or recover the bright end.
   layer("#ffffff", (Math.max(0, a.highlights) / 100) * 0.3, "soft-light");
   layer("#000000", (Math.max(0, -a.highlights) / 100) * 0.3, "soft-light");
   layer("#ffffff", (Math.max(0, a.whites) / 100) * 0.28, "overlay");
   layer("#000000", (Math.max(0, -a.whites) / 100) * 0.22, "overlay");
 
-  // Shadows / blacks shape the dark end.
   layer("#ffffff", (Math.max(0, a.shadows) / 100) * 0.28, "lighten");
   layer("#000000", (Math.max(0, -a.shadows) / 100) * 0.22, "multiply");
   layer("#000000", (Math.max(0, -a.blacks) / 100) * 0.3, "multiply");
   layer("#ffffff", (Math.max(0, a.blacks) / 100) * 0.2, "lighten");
 
-  // Temperature (warm/cool) and tint (magenta/green).
   layer("#ff9a3c", (Math.max(0, a.temperature) / 100) * 0.35, "soft-light");
   layer("#3ca5ff", (Math.max(0, -a.temperature) / 100) * 0.35, "soft-light");
   layer("#ff3cf0", (Math.max(0, a.tint) / 100) * 0.25, "soft-light");
@@ -117,7 +114,7 @@ const HUE_BAND_CENTERS: Partial<Record<keyof Adjustments, number>> = {
   satPurple: 280,
 };
 
-const HUE_BAND_HALF_WIDTH = 45; // degrees of influence on each side of a band's center
+const HUE_BAND_HALF_WIDTH = 45;
 
 function hueDistance(a: number, b: number): number {
   const d = Math.abs(a - b) % 360;
@@ -165,12 +162,6 @@ function hslToRgb(h: number, s: number, l: number) {
   };
 }
 
-/**
- * Per-color-band saturation: a smooth cosine falloff around each band's hue
- * center, same approximation spirit as tone()'s highlights/shadows — not a
- * true hue mask. Multiplicative, not additive, so already-gray pixels
- * (s ≈ 0) are left alone rather than gaining false color.
- */
 function applyColorBandSaturation(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
   const bands = Object.entries(HUE_BAND_CENTERS) as [keyof Adjustments, number][];
   const active = bands.filter(([key]) => Math.abs(a[key]) > 0.5);
@@ -205,9 +196,88 @@ function applyColorBandSaturation(ctx: Ctx2D, w: number, h: number, a: Adjustmen
   ctx.putImageData(imageData, 0, 0);
 }
 
+/** Same three CSS filters as buildFilter, but for a mask layer's four
+ *  parameters — no clarity/vibrance/blur, since local areas keep a smaller,
+ *  more contained parameter set than global adjustments. */
+function buildLocalFilter(a: { exposure: number; contrast: number; saturation: number }): string {
+  const brightness = 1 + (a.exposure / 100) * 0.55;
+  const contrast = 1 + (a.contrast / 100) * 0.6;
+  const saturate = Math.max(0, 1 + a.saturation / 100);
+  return [
+    `brightness(${clamp(brightness, 0.05, 4).toFixed(4)})`,
+    `contrast(${clamp(contrast, 0.05, 4).toFixed(4)})`,
+    `saturate(${saturate.toFixed(4)})`,
+  ].join(" ");
+}
+
+/** Rasterizes a layer's brush strokes (normalized to the current output
+ *  frame) into a soft-edged alpha mask at the exact w×h being rendered —
+ *  resolution-independent, so a mask painted on a small preview lines up
+ *  correctly at full export resolution. */
+function rasterizeMask(w: number, h: number, strokes: MaskLayer["strokes"]): HTMLCanvasElement {
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = w;
+  maskCanvas.height = h;
+  const mctx = maskCanvas.getContext("2d")!;
+  const minDim = Math.min(w, h);
+
+  for (const stroke of strokes) {
+    const cx = stroke.x * w;
+    const cy = stroke.y * h;
+    const r = stroke.radius * minDim;
+    const grad = mctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.7, "rgba(255,255,255,1)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    mctx.fillStyle = grad;
+    mctx.beginPath();
+    mctx.arc(cx, cy, r, 0, Math.PI * 2);
+    mctx.fill();
+  }
+
+  return maskCanvas;
+}
+
+/**
+ * Applies one local (masked) layer: re-draws the already-rendered image
+ * through that layer's own filter (so local edits stack on top of the
+ * global edit, not a separately-graded version), cuts it down to the
+ * painted area via destination-in compositing, then composites the result
+ * back onto the main render target.
+ */
+function applyMaskLayer(ctx: Ctx2D, target: RenderTarget, w: number, h: number, layer: MaskLayer) {
+  if (layer.strokes.length === 0) return;
+
+  const temp = document.createElement("canvas");
+  temp.width = w;
+  temp.height = h;
+  const tctx = temp.getContext("2d") as CanvasRenderingContext2D | null;
+  if (!tctx) return;
+
+  tctx.filter = buildLocalFilter(layer.adjustments);
+  tctx.drawImage(target as CanvasImageSource, 0, 0, w, h);
+  tctx.filter = "none";
+
+  if (Math.abs(layer.adjustments.temperature) > 0.5) {
+    tctx.save();
+    tctx.globalCompositeOperation = "soft-light";
+    tctx.globalAlpha = clamp(Math.abs(layer.adjustments.temperature) / 100, 0, 1) * 0.35;
+    tctx.fillStyle = layer.adjustments.temperature > 0 ? "#ff9a3c" : "#3ca5ff";
+    tctx.fillRect(0, 0, w, h);
+    tctx.restore();
+  }
+
+  const mask = rasterizeMask(w, h, layer.strokes);
+  tctx.globalCompositeOperation = "destination-in";
+  tctx.drawImage(mask, 0, 0);
+
+  ctx.drawImage(temp, 0, 0);
+}
+
 /**
  * Renders the source image through the edit state onto `target`.
  * `maxDimension` downscales for fast interactive previews; omit for export quality.
+ * `maskLayers` (optional) are applied last, each stacking on top of everything above.
  */
 export function renderImage(
   source: CanvasImageSource,
@@ -216,6 +286,7 @@ export function renderImage(
   edit: EditState,
   target: RenderTarget,
   maxDimension?: number,
+  maskLayers?: MaskLayer[],
 ) {
   const out = outputSize(srcW, srcH, edit);
   let scale = 1;
@@ -234,11 +305,9 @@ export function renderImage(
 
   const rot = (((edit.rotation % 360) + 360) % 360) as number;
   const swap = rot === 90 || rot === 270;
-  // Full rotated canvas dimensions (before crop), in output pixels.
   const rotW = (swap ? srcH : srcW) * (w / out.width);
   const rotH = (swap ? srcW : srcH) * (h / out.height);
 
-  // Translate so the crop origin lands at 0,0
   ctx.translate(-edit.crop.x * rotW, -edit.crop.y * rotH);
 
   ctx.filter = buildFilter(edit.adjustments, Math.max(w, h) / Math.max(out.width, out.height));
@@ -261,6 +330,12 @@ export function renderImage(
 
   sharpen(ctx, target, w, h, edit.adjustments.sharpness);
 
+  if (maskLayers) {
+    for (const layer of maskLayers) {
+      applyMaskLayer(ctx, target, w, h, layer);
+    }
+  }
+
   return { width: w, height: h };
 }
 
@@ -271,9 +346,10 @@ export async function exportImage(
   edit: EditState,
   format: string,
   quality: number,
+  maskLayers?: MaskLayer[],
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
-  renderImage(source, srcW, srcH, edit, canvas);
+  renderImage(source, srcW, srcH, edit, canvas, undefined, maskLayers);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, format, quality));
   if (!blob) throw new Error("encode-failed");
   return blob;

@@ -4,13 +4,14 @@ import { useEditor } from "@/state/editor/EditorContext";
 import { DEFAULT_ADJUSTMENTS, DEFAULT_CROP } from "@/types/editor";
 import { CanvasControls } from "./CanvasControls";
 import { CropOverlay } from "./CropOverlay";
+import { MaskOverlay } from "./MaskOverlay";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
 
 export function Canvas() {
   const { state, setViewport, setError } = useEditor();
-  const { source, edit, viewport, showOriginal, activeTool } = state;
+  const { source, edit, viewport, showOriginal, activeTool, maskLayers } = state;
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number | null>(null);
@@ -18,6 +19,7 @@ export function Canvas() {
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
   const isCropping = activeTool === "crop";
+  const isMasking = activeTool === "mask";
 
   const out = useMemo(() => {
     if (!source) return { width: 1, height: 1 };
@@ -64,6 +66,7 @@ export function Canvas() {
           previewEdit,
           canvasRef.current!,
           maxDim,
+          showOriginal ? undefined : maskLayers,
         );
       } catch {
         setError("Pictoe couldn't process this image. Try another image or check its format.");
@@ -82,6 +85,7 @@ export function Canvas() {
     out.width,
     out.height,
     setError,
+    maskLayers,
   ]);
 
   const zoomAt = useCallback(
@@ -118,7 +122,7 @@ export function Canvas() {
   }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (activeTool === "crop") return;
+    if (activeTool === "crop" || activeTool === "mask") return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     dragRef.current = { x: e.clientX, y: e.clientY, panX: viewport.panX, panY: viewport.panY };
   };
@@ -146,7 +150,12 @@ export function Canvas() {
       <div
         className="absolute inset-0 flex items-center justify-center"
         style={{
-          cursor: activeTool === "crop" ? "default" : dragRef.current ? "grabbing" : "grab",
+          cursor:
+            activeTool === "crop" || activeTool === "mask"
+              ? "default"
+              : dragRef.current
+                ? "grabbing"
+                : "grab",
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -168,6 +177,7 @@ export function Canvas() {
             aria-label={showOriginal ? "Original image" : "Edited image preview"}
           />
           {activeTool === "crop" && <CropOverlay />}
+          {isMasking && <MaskOverlay />}
         </div>
       </div>
 

@@ -41,6 +41,7 @@ export function ExportControl() {
         state.edit,
         format,
         quality,
+        state.maskLayers,
       );
       const ext = FORMATS.find((f) => f.value === format)!.ext;
       const base = state.source.name.replace(/\.[^.]+$/, "");

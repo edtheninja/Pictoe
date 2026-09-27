@@ -12,10 +12,14 @@ import {
   DEFAULT_ADJUSTMENTS,
   DEFAULT_CROP,
   DEFAULT_EDIT_STATE,
+  DEFAULT_LOCAL_ADJUSTMENTS,
   type AdjustmentKey,
   type CropRect,
   type EditState,
   type ImageAnalysis,
+  type LocalAdjustments,
+  type MaskLayer,
+  type MaskStroke,
   type ProcessingState,
   type SourceImage,
   type ToolId,
@@ -35,6 +39,8 @@ type State = {
   error: string | null;
   showOriginal: boolean;
   analysis: ImageAnalysis | null;
+  maskLayers: MaskLayer[];
+  activeMaskLayerId: string | null;
 };
 
 const initialState: State = {
@@ -48,6 +54,8 @@ const initialState: State = {
   error: null,
   showOriginal: false,
   analysis: null,
+  maskLayers: [],
+  activeMaskLayerId: null,
 };
 
 type Action =
@@ -66,7 +74,12 @@ type Action =
   | { type: "setTool"; tool: ToolId | null }
   | { type: "setProcessing"; processing: ProcessingState }
   | { type: "setError"; error: string | null }
-  | { type: "setShowOriginal"; value: boolean };
+  | { type: "setShowOriginal"; value: boolean }
+  | { type: "addMaskLayer" }
+  | { type: "deleteMaskLayer"; id: string }
+  | { type: "setActiveMaskLayer"; id: string | null }
+  | { type: "paintMaskStroke"; id: string; stroke: MaskStroke }
+  | { type: "setMaskLayerAdjustment"; id: string; key: keyof LocalAdjustments; value: number };
 
 const HISTORY_LIMIT = 60;
 
@@ -155,12 +168,9 @@ function reducer(state: State, action: Action): State {
       };
     }
     case "jumpTo": {
-      // Combine past + current + future into one timeline, then rebuild
-      // past/future around whichever index was clicked — works the same
-      // whether jumping backward into past or forward into future.
       const timeline = [...state.past, state.edit, ...state.future];
       const clamped = Math.max(0, Math.min(action.index, timeline.length - 1));
-      if (clamped === state.past.length) return state; // already there
+      if (clamped === state.past.length) return state;
       return {
         ...state,
         edit: timeline[clamped]!,
@@ -178,6 +188,42 @@ function reducer(state: State, action: Action): State {
       return { ...state, error: action.error };
     case "setShowOriginal":
       return { ...state, showOriginal: action.value };
+    case "addMaskLayer": {
+      const id = crypto.randomUUID();
+      const name = `Area ${state.maskLayers.length + 1}`;
+      return {
+        ...state,
+        maskLayers: [
+          ...state.maskLayers,
+          { id, name, strokes: [], adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS } },
+        ],
+        activeMaskLayerId: id,
+      };
+    }
+    case "deleteMaskLayer":
+      return {
+        ...state,
+        maskLayers: state.maskLayers.filter((l) => l.id !== action.id),
+        activeMaskLayerId: state.activeMaskLayerId === action.id ? null : state.activeMaskLayerId,
+      };
+    case "setActiveMaskLayer":
+      return { ...state, activeMaskLayerId: action.id };
+    case "paintMaskStroke":
+      return {
+        ...state,
+        maskLayers: state.maskLayers.map((l) =>
+          l.id === action.id ? { ...l, strokes: [...l.strokes, action.stroke] } : l,
+        ),
+      };
+    case "setMaskLayerAdjustment":
+      return {
+        ...state,
+        maskLayers: state.maskLayers.map((l) =>
+          l.id === action.id
+            ? { ...l, adjustments: { ...l.adjustments, [action.key]: action.value } }
+            : l,
+        ),
+      };
     default:
       return state;
   }
@@ -204,13 +250,18 @@ type EditorApi = {
   applyAdjustments: (patch: Partial<Record<AdjustmentKey, number>>) => void;
   undo: () => void;
   redo: () => void;
-  /** jump directly to any point in the combined past/current/future timeline */
   jumpToHistory: (index: number) => void;
   setViewport: (v: Partial<Viewport>) => void;
   setTool: (t: ToolId | null) => void;
   setProcessing: (p: ProcessingState) => void;
   setError: (e: string | null) => void;
   setShowOriginal: (v: boolean) => void;
+  /** Local (masked) areas — outside undo/redo; deleting a layer is how you "undo" it. */
+  addMaskLayer: () => void;
+  deleteMaskLayer: (id: string) => void;
+  setActiveMaskLayer: (id: string | null) => void;
+  paintMaskStroke: (id: string, stroke: MaskStroke) => void;
+  setMaskLayerAdjustment: (id: string, key: keyof LocalAdjustments, value: number) => void;
 };
 
 const EditorContext = createContext<EditorApi | null>(null);
@@ -328,6 +379,12 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setProcessing: (processing) => dispatch({ type: "setProcessing", processing }),
       setError: (error) => dispatch({ type: "setError", error }),
       setShowOriginal: (value) => dispatch({ type: "setShowOriginal", value }),
+      addMaskLayer: () => dispatch({ type: "addMaskLayer" }),
+      deleteMaskLayer: (id) => dispatch({ type: "deleteMaskLayer", id }),
+      setActiveMaskLayer: (id) => dispatch({ type: "setActiveMaskLayer", id }),
+      paintMaskStroke: (id, stroke) => dispatch({ type: "paintMaskStroke", id, stroke }),
+      setMaskLayerAdjustment: (id, key, value) =>
+        dispatch({ type: "setMaskLayerAdjustment", id, key, value }),
     }),
     [state, beginInteraction, endInteraction, cancelInteraction],
   );

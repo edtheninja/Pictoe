@@ -37,7 +37,8 @@ export type EditState = {
 
 export type Viewport = { zoom: number; panX: number; panY: number };
 
-export type ToolId = "adjust" | "color" | "detail" | "crop" | "heal" | "intent" | "presets";
+export type ToolId =
+  "adjust" | "color" | "detail" | "crop" | "heal" | "intent" | "presets" | "mask";
 
 export type SourceImage = {
   element: HTMLImageElement;
@@ -265,6 +266,29 @@ export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
     level: "advanced",
   },
 ];
+
+export type MaskStroke = { x: number; y: number; radius: number };
+
+export type LocalAdjustments = {
+  exposure: number;
+  contrast: number;
+  saturation: number;
+  temperature: number;
+};
+
+export const DEFAULT_LOCAL_ADJUSTMENTS: LocalAdjustments = {
+  exposure: 0,
+  contrast: 0,
+  saturation: 0,
+  temperature: 0,
+};
+
+export type MaskLayer = {
+  id: string;
+  name: string;
+  strokes: MaskStroke[];
+  adjustments: LocalAdjustments;
+};
 
 export type ImageAnalysis = {
   avgLuminance: number; // 0–255
