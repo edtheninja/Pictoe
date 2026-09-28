@@ -1,107 +1,129 @@
-# Pictoe
+# 🖼️ Pictoe
 
-**Your image. Your intent. Your control.**
+### Your image. Your intent. Your control.
 
-Pictoe is a canvas-first image editor built around one idea: professional-level
-editing power shouldn't require professional-level complexity up front.
-Controls are revealed progressively — a beginner can improve a photo in
-seconds, and deeper control is always one tap away.
+Pictoe is a **canvas-first, local-first image editor** built around a simple idea:
 
-## What Pictoe can do today
+> Professional-level editing power shouldn't require professional-level complexity up front.
 
-**Canvas**
+Instead of overwhelming users with dozens of controls, Pictoe progressively reveals editing power when it is needed. A beginner can improve an image in seconds, while advanced controls remain available for deeper editing.
 
-- Zoom (cursor-centered), pan, and automatic fit-to-screen
-- Responsive: a docked side panel on desktop, a bottom sheet on mobile —
-  not one layout stretched across breakpoints
-
-**Editing engine** — 14 non-destructive adjustments across Light, Color,
-and Detail (exposure, brightness, contrast, highlights, shadows, whites,
-blacks, saturation, vibrance, temperature, tint, clarity, sharpness, blur),
-plus crop with aspect-ratio presets, rotation, and flip. Nothing here
-touches the original file — every edit is structured state, applied at
-render/export time.
-
-**History**
-
-- Full undo/redo
-- A history panel (next to Undo/Redo in the header) lists every past and
-  future edit state with a plain-language label (e.g. "Exposure +18",
-  "Crop / rotate") — click any entry to jump straight to it, not just
-  step-by-step
-
-**Before/After** — hold to compare, plus a keyboard-accessible toggle for
-anyone who can't use the gesture.
-
-**Intent Bar** — type what you want ("make it warmer", "add drama") and
-Pictoe proposes a specific adjustment patch, previewed live before you
-apply or dismiss it. Suggestions scale to the actual photo: a local
-image-analysis pass (luminance, clipping, color-temperature bias — all
-computed client-side, no network) means "brighten" does more on a
-genuinely dark photo than a bright one. Pictoe will also proactively
-suggest a fix (e.g. "this looks a little dark") on an unedited image with
-no typing required. Object removal, sky replacement, and other
-generative/cloud-only operations are recognized and clearly labeled as
-requiring an internet connection — they're not implemented yet, and
-Pictoe says so rather than pretending to.
-
-**Presets** — five built-in looks (Warm Film, Moody B&W, Vivid Pop, Cool
-Blue, Soft Portrait), plus save/delete your own from the current edit
-state. Stored locally.
-
-**Session persistence** — close the tab, come back later: your last photo
-and its edits are restored automatically (stored locally via IndexedDB).
-Closing an image explicitly clears the saved session.
-
-**Export** — JPG, PNG, or WebP, with High/Medium/Small quality presets
-plus a custom 1–100% slider for JPG/WebP.
-
-## What's not built yet
-
-- Cloud/AI-dependent operations (object removal, generative expansion, sky
-  and background replacement, subject isolation) — architecturally
-  anticipated, not implemented
-- Selective/local (masked or region-based) adjustments — every adjustment
-  currently applies globally to the whole frame
-- Advanced color controls (curves, HSL) and batch workflows
-
-## Tech stack
-
-React 19 · TypeScript · Vite 8 · TanStack Router/Start · Tailwind CSS 4 ·
-Radix UI · lucide-react · React Query · Zod · Bun (lockfile)
-
-## Project structure
-
-```
-src/
-├── components/
-│   ├── canvas/         Canvas, CanvasControls, CropOverlay
-│   ├── controls/       AdjustmentSlider
-│   ├── editor/         Editor, EditorHeader, HistoryPanel, AdjustmentPanel,
-│   │                   BeforeAfter, ExportControl, ImportScreen, ToolDock
-│   └── ui/              Radix/shadcn-style primitives
-├── engine/
-│   ├── image/           load.ts, render.ts, analyze.ts
-│   └── storage/         session.ts, presets.ts (IndexedDB)
-├── features/
-│   ├── adjustments/     AdjustmentGroup
-│   ├── crop/            CropTool
-│   ├── intent/          IntentBar, parseIntent
-│   └── presets/         PresetsPanel, builtinPresets
-├── state/editor/         EditorContext (reducer, undo/redo/history, session)
-├── types/editor.ts
-└── routes/
-```
-
-## Development
-
-```sh
-git clone https://github.com/edtheninja/Pictoe.git
-cd Pictoe
-npm i
-npm run dev
-```
+Pictoe is designed as a **browser-based, non-destructive image editing experience** where the original image remains untouched and edits are represented as structured editor state.
 
 ---
 
-_Originally scaffolded with [Lovable](https://lovable.dev); developed locally since._
+## ✨ What Pictoe Does
+
+Pictoe currently provides a complete local image-editing workflow:
+
+- 🖼️ Canvas-based image editing
+- 🔍 Cursor-centered zoom
+- ✋ Pan and automatic fit-to-screen
+- 🎛️ 14 non-destructive image adjustments
+- ✂️ Crop with aspect-ratio presets
+- 🔄 Rotation and flipping
+- ↩️ Full undo/redo
+- 🕘 Direct-access edit history
+- 👁️ Before/After comparison
+- 💬 Natural-language Intent Bar
+- 🧠 Client-side image analysis
+- 🎨 Built-in presets
+- 💾 Custom local presets
+- 💽 Persistent editing sessions
+- 📤 JPG, PNG and WebP export
+- 📱 Responsive desktop and mobile editing layouts
+
+Everything currently runs locally in the browser.
+
+No image needs to be uploaded to a server for normal editing.
+
+---
+
+# 🎨 Core Experience
+
+## Canvas
+
+The canvas is the center of the Pictoe experience.
+
+Users can:
+
+- Zoom around the cursor
+- Pan across the image
+- Fit the image automatically to the available workspace
+- Work with a responsive editing interface
+- Compare edits directly against the original
+
+Desktop uses a **docked editing panel**, while mobile uses a **bottom-sheet editing experience** rather than simply shrinking the desktop interface.
+
+---
+
+# 🎛️ Non-Destructive Editing
+
+Pictoe currently supports **14 global image adjustments**.
+
+### Light
+
+- Exposure
+- Brightness
+- Contrast
+- Highlights
+- Shadows
+- Whites
+- Blacks
+
+### Color
+
+- Saturation
+- Vibrance
+- Temperature
+- Tint
+
+### Detail
+
+- Clarity
+- Sharpness
+- Blur
+
+Edits do not modify the original image file.
+
+Instead, Pictoe stores the editing parameters as structured state and applies those parameters during rendering and export.
+
+This makes editing reversible and allows the same source image to support multiple edit states.
+
+---
+
+# ✂️ Crop & Transform
+
+Pictoe includes a dedicated crop and transformation workflow.
+
+### Crop
+
+Supported aspect-ratio presets allow users to quickly prepare images for different formats and compositions.
+
+### Transform
+
+- Rotate
+- Flip horizontally
+- Flip vertically
+
+Crop and transform operations are integrated into the editor state rather than permanently modifying the source image.
+
+---
+
+# 🕘 History
+
+Pictoe provides full editing history with:
+
+- Undo
+- Redo
+- Direct history navigation
+- Past and future edit states
+
+Instead of displaying technical state information, history entries use plain-language descriptions such as:
+
+```text
+Exposure +18
+Contrast -10
+Warmth +12
+Crop / rotate
+```
