@@ -4,10 +4,11 @@ import { useEditor } from "@/state/editor/EditorContext";
 const BRUSH_RADIUS = 0.06; // normalized to min(width, height) of the current output frame
 const MIN_STROKE_SPACING = 0.015; // skip near-duplicate points during a fast drag
 
-/** Paints brush strokes onto the active mask layer. Sits in the same
- *  zoom/pan-transformed wrapper as Canvas's own <canvas>, so pointer
- *  coordinates map directly via this element's own bounding rect —
- *  identical approach to CropOverlay. */
+/**
+ * Paints brush strokes onto the active mask layer.
+ * Sits in the same zoom/pan-transformed wrapper as Canvas's own <canvas>,
+ * so pointer coordinates map directly via this element's own bounding rect.
+ */
 export function MaskOverlay() {
   const { state, paintMaskStroke } = useEditor();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -15,46 +16,67 @@ export function MaskOverlay() {
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   if (state.activeTool !== "mask") return null;
+
   const activeId = state.activeMaskLayerId;
+  const mode = state.maskMode;
 
   const paintAt = (clientX: number, clientY: number) => {
     if (!activeId) return;
+
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
+
     const x = (clientX - rect.left) / rect.width;
     const y = (clientY - rect.top) / rect.height;
+
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
 
     const last = lastPointRef.current;
+
     if (last) {
       const dist = Math.hypot(x - last.x, y - last.y);
       if (dist < MIN_STROKE_SPACING) return;
     }
+
     lastPointRef.current = { x, y };
-    paintMaskStroke(activeId, { x, y, radius: BRUSH_RADIUS });
+
+    paintMaskStroke(activeId, {
+      x,
+      y,
+      radius: BRUSH_RADIUS,
+      mode,
+    });
   };
 
   return (
     <div
       ref={containerRef}
       className="absolute inset-0 touch-none"
-      style={{ cursor: activeId ? "crosshair" : "default" }}
+      style={{
+        cursor: activeId ? "crosshair" : "default",
+      }}
       onPointerDown={(e) => {
         if (!activeId) return;
+
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
         paintingRef.current = true;
         lastPointRef.current = null;
+
         paintAt(e.clientX, e.clientY);
       }}
       onPointerMove={(e) => {
         if (!paintingRef.current) return;
+
         paintAt(e.clientX, e.clientY);
       }}
       onPointerUp={() => {
         paintingRef.current = false;
+        lastPointRef.current = null;
       }}
       onPointerCancel={() => {
         paintingRef.current = false;
+        lastPointRef.current = null;
       }}
     >
       {!activeId && (

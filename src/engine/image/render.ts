@@ -218,6 +218,7 @@ function rasterizeMask(w: number, h: number, strokes: MaskLayer["strokes"]): HTM
   const maskCanvas = document.createElement("canvas");
   maskCanvas.width = w;
   maskCanvas.height = h;
+
   const mctx = maskCanvas.getContext("2d")!;
   const minDim = Math.min(w, h);
 
@@ -225,14 +226,23 @@ function rasterizeMask(w: number, h: number, strokes: MaskLayer["strokes"]): HTM
     const cx = stroke.x * w;
     const cy = stroke.y * h;
     const r = stroke.radius * minDim;
+
     const grad = mctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+
     grad.addColorStop(0, "rgba(255,255,255,1)");
     grad.addColorStop(0.7, "rgba(255,255,255,1)");
     grad.addColorStop(1, "rgba(255,255,255,0)");
+
+    mctx.save();
+
+    mctx.globalCompositeOperation = stroke.mode === "erase" ? "destination-out" : "source-over";
+
     mctx.fillStyle = grad;
     mctx.beginPath();
     mctx.arc(cx, cy, r, 0, Math.PI * 2);
     mctx.fill();
+
+    mctx.restore();
   }
 
   return maskCanvas;

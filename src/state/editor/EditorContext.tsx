@@ -41,6 +41,7 @@ type State = {
   analysis: ImageAnalysis | null;
   maskLayers: MaskLayer[];
   activeMaskLayerId: string | null;
+  maskMode: "paint" | "erase";
 };
 
 const initialState: State = {
@@ -56,6 +57,7 @@ const initialState: State = {
   analysis: null,
   maskLayers: [],
   activeMaskLayerId: null,
+  maskMode: "paint",
 };
 
 type Action =
@@ -78,6 +80,7 @@ type Action =
   | { type: "addMaskLayer" }
   | { type: "deleteMaskLayer"; id: string }
   | { type: "setActiveMaskLayer"; id: string | null }
+  | { type: "setMaskMode"; mode: "paint" | "erase" }
   | { type: "paintMaskStroke"; id: string; stroke: MaskStroke }
   | { type: "setMaskLayerAdjustment"; id: string; key: keyof LocalAdjustments; value: number };
 
@@ -208,6 +211,8 @@ function reducer(state: State, action: Action): State {
       };
     case "setActiveMaskLayer":
       return { ...state, activeMaskLayerId: action.id };
+    case "setMaskMode":
+      return { ...state, maskMode: action.mode };
     case "paintMaskStroke":
       return {
         ...state,
@@ -260,6 +265,7 @@ type EditorApi = {
   addMaskLayer: () => void;
   deleteMaskLayer: (id: string) => void;
   setActiveMaskLayer: (id: string | null) => void;
+  setMaskMode: (mode: "paint" | "erase") => void;
   paintMaskStroke: (id: string, stroke: MaskStroke) => void;
   setMaskLayerAdjustment: (id: string, key: keyof LocalAdjustments, value: number) => void;
 };
@@ -382,6 +388,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       addMaskLayer: () => dispatch({ type: "addMaskLayer" }),
       deleteMaskLayer: (id) => dispatch({ type: "deleteMaskLayer", id }),
       setActiveMaskLayer: (id) => dispatch({ type: "setActiveMaskLayer", id }),
+      setMaskMode: (mode) => dispatch({ type: "setMaskMode", mode }),
       paintMaskStroke: (id, stroke) => dispatch({ type: "paintMaskStroke", id, stroke }),
       setMaskLayerAdjustment: (id, key, value) =>
         dispatch({ type: "setMaskLayerAdjustment", id, key, value }),

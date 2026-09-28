@@ -267,7 +267,14 @@ export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
   },
 ];
 
-export type MaskStroke = { x: number; y: number; radius: number };
+export type MaskStrokeMode = "paint" | "erase";
+
+export type MaskStroke = {
+  x: number;
+  y: number;
+  radius: number;
+  mode?: MaskStrokeMode;
+};
 
 export type LocalAdjustments = {
   exposure: number;
