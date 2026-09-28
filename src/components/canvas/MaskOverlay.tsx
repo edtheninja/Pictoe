@@ -9,59 +9,59 @@ const MIN_STROKE_SPACING = 0.015; // skip near-duplicate points during a fast dr
  *  coordinates map directly via this element's own bounding rect —
  *  identical approach to CropOverlay. */
 export function MaskOverlay() {
-    const { state, paintMaskStroke } = useEditor();
-    const containerRef = useRef<HTMLDivElement>(null);
-    const paintingRef = useRef(false);
-    const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const { state, paintMaskStroke } = useEditor();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const paintingRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
-    if (state.activeTool !== "mask") return null;
-    const activeId = state.activeMaskLayerId;
+  if (state.activeTool !== "mask") return null;
+  const activeId = state.activeMaskLayerId;
 
-    const paintAt = (clientX: number, clientY: number) => {
+  const paintAt = (clientX: number, clientY: number) => {
+    if (!activeId) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = (clientX - rect.left) / rect.width;
+    const y = (clientY - rect.top) / rect.height;
+    if (x < 0 || x > 1 || y < 0 || y > 1) return;
+
+    const last = lastPointRef.current;
+    if (last) {
+      const dist = Math.hypot(x - last.x, y - last.y);
+      if (dist < MIN_STROKE_SPACING) return;
+    }
+    lastPointRef.current = { x, y };
+    paintMaskStroke(activeId, { x, y, radius: BRUSH_RADIUS });
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className="absolute inset-0 touch-none"
+      style={{ cursor: activeId ? "crosshair" : "default" }}
+      onPointerDown={(e) => {
         if (!activeId) return;
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        const x = (clientX - rect.left) / rect.width;
-        const y = (clientY - rect.top) / rect.height;
-        if (x < 0 || x > 1 || y < 0 || y > 1) return;
-
-        const last = lastPointRef.current;
-        if (last) {
-            const dist = Math.hypot(x - last.x, y - last.y);
-            if (dist < MIN_STROKE_SPACING) return;
-        }
-        lastPointRef.current = { x, y };
-        paintMaskStroke(activeId, { x, y, radius: BRUSH_RADIUS });
-    };
-
-    return (
-        <div
-            ref={containerRef}
-            className="absolute inset-0 touch-none"
-            style={{ cursor: activeId ? "crosshair" : "default" }}
-            onPointerDown={(e) => {
-                if (!activeId) return;
-                (e.target as HTMLElement).setPointerCapture(e.pointerId);
-                paintingRef.current = true;
-                lastPointRef.current = null;
-                paintAt(e.clientX, e.clientY);
-            }}
-            onPointerMove={(e) => {
-                if (!paintingRef.current) return;
-                paintAt(e.clientX, e.clientY);
-            }}
-            onPointerUp={() => {
-                paintingRef.current = false;
-            }}
-            onPointerCancel={() => {
-                paintingRef.current = false;
-            }}
-        >
-            {!activeId && (
-                <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-elevated/90 px-md py-sm text-[13px] text-text-secondary backdrop-blur">
-                    Add an area to start painting
-                </div>
-            )}
+        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+        paintingRef.current = true;
+        lastPointRef.current = null;
+        paintAt(e.clientX, e.clientY);
+      }}
+      onPointerMove={(e) => {
+        if (!paintingRef.current) return;
+        paintAt(e.clientX, e.clientY);
+      }}
+      onPointerUp={() => {
+        paintingRef.current = false;
+      }}
+      onPointerCancel={() => {
+        paintingRef.current = false;
+      }}
+    >
+      {!activeId && (
+        <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-elevated/90 px-md py-sm text-[13px] text-text-secondary backdrop-blur">
+          Add an area to start painting
         </div>
-    );
+      )}
+    </div>
+  );
 }
