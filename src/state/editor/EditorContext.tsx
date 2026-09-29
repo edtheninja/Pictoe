@@ -62,7 +62,13 @@ const initialState: State = {
 
 type Action =
   | { type: "setSource"; source: SourceImage; analysis: ImageAnalysis }
-  | { type: "restoreSession"; source: SourceImage; analysis: ImageAnalysis; edit: EditState }
+  | {
+    type: "restoreSession";
+    source: SourceImage;
+    analysis: ImageAnalysis;
+    edit: EditState;
+    maskLayers: MaskLayer[] | undefined;
+  }
   | { type: "closeImage" }
   | { type: "setAdjustment"; key: AdjustmentKey; value: number }
   | { type: "commit"; snapshot: EditState }
@@ -106,6 +112,8 @@ function reducer(state: State, action: Action): State {
         source: action.source,
         analysis: action.analysis,
         edit: action.edit,
+        maskLayers: action.maskLayers ?? [],
+        activeMaskLayerId: action.maskLayers?.[0]?.id ?? null,
         activeTool: "adjust",
       };
     case "closeImage":
@@ -324,6 +332,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
           source,
           analysis: analyzeImage(element),
           edit: saved.edit,
+          maskLayers: saved.maskLayers,
         });
       } catch {
         // Corrupt/unreadable saved session — fall back to the empty state
