@@ -72,12 +72,12 @@ const initialState: State = {
 type Action =
   | { type: "setSource"; source: SourceImage; analysis: ImageAnalysis }
   | {
-    type: "restoreSession";
-    source: SourceImage;
-    analysis: ImageAnalysis;
-    edit: EditState;
-    maskLayers?: MaskLayer[];
-  }
+      type: "restoreSession";
+      source: SourceImage;
+      analysis: ImageAnalysis;
+      edit: EditState;
+      maskLayers?: MaskLayer[];
+    }
   | { type: "closeImage" }
   | { type: "setAdjustment"; key: AdjustmentKey; value: number }
   | { type: "commit"; snapshot: EditState }
@@ -425,7 +425,6 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Autosave, debounced — avoids writing to IndexedDB on every slider frame.
   // Autosave, debounced — avoids writing to IndexedDB on every slider frame.
   const saveTimeoutRef = useRef<number | undefined>(undefined);
 
