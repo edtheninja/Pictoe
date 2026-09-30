@@ -10,7 +10,7 @@ const MIN_STROKE_SPACING = 0.015; // skip near-duplicate points during a fast dr
  * so pointer coordinates map directly via this element's own bounding rect.
  */
 export function MaskOverlay() {
-  const { state, paintMaskStroke } = useEditor();
+  const { state, paintMaskStroke, recordMaskHistory } = useEditor();
   const containerRef = useRef<HTMLDivElement>(null);
   const paintingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -59,7 +59,7 @@ export function MaskOverlay() {
         if (!activeId) return;
 
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
-
+        recordMaskHistory();
         paintingRef.current = true;
         lastPointRef.current = null;
 

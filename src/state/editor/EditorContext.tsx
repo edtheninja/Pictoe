@@ -42,6 +42,13 @@ type State = {
   maskLayers: MaskLayer[];
   activeMaskLayerId: string | null;
   maskMode: "paint" | "erase";
+  maskPast: MaskSnapshot[];
+  maskFuture: MaskSnapshot[];
+};
+
+type MaskSnapshot = {
+  maskLayers: MaskLayer[];
+  activeMaskLayerId: string | null;
 };
 
 const initialState: State = {
@@ -58,6 +65,8 @@ const initialState: State = {
   maskLayers: [],
   activeMaskLayerId: null,
   maskMode: "paint",
+  maskPast: [],
+  maskFuture: [],
 };
 
 type Action =
@@ -67,7 +76,7 @@ type Action =
     source: SourceImage;
     analysis: ImageAnalysis;
     edit: EditState;
-    maskLayers: MaskLayer[] | undefined;
+    maskLayers?: MaskLayer[];
   }
   | { type: "closeImage" }
   | { type: "setAdjustment"; key: AdjustmentKey; value: number }
@@ -88,13 +97,28 @@ type Action =
   | { type: "setActiveMaskLayer"; id: string | null }
   | { type: "setMaskMode"; mode: "paint" | "erase" }
   | { type: "paintMaskStroke"; id: string; stroke: MaskStroke }
-  | { type: "setMaskLayerAdjustment"; id: string; key: keyof LocalAdjustments; value: number };
+  | { type: "setMaskLayerAdjustment"; id: string; key: keyof LocalAdjustments; value: number }
+  | { type: "recordMaskHistory" }
+  | { type: "undoMask" }
+  | { type: "redoMask" };
 
 const HISTORY_LIMIT = 60;
 
 function pushHistory(state: State, snapshot: EditState): Pick<State, "past" | "future"> {
   const past = [...state.past, snapshot].slice(-HISTORY_LIMIT);
   return { past, future: [] };
+}
+
+function pushMaskHistory(state: State): Pick<State, "maskPast" | "maskFuture"> {
+  const snapshot: MaskSnapshot = {
+    maskLayers: state.maskLayers,
+    activeMaskLayerId: state.activeMaskLayerId,
+  };
+
+  return {
+    maskPast: [...state.maskPast, snapshot].slice(-HISTORY_LIMIT),
+    maskFuture: [],
+  };
 }
 
 function reducer(state: State, action: Action): State {
@@ -199,24 +223,80 @@ function reducer(state: State, action: Action): State {
       return { ...state, error: action.error };
     case "setShowOriginal":
       return { ...state, showOriginal: action.value };
+    case "recordMaskHistory":
+      return { ...state, ...pushMaskHistory(state) };
+
+    case "undoMask": {
+      if (!state.maskPast.length) return state;
+
+      const previous = state.maskPast[state.maskPast.length - 1]!;
+
+      return {
+        ...state,
+        maskLayers: previous.maskLayers,
+        activeMaskLayerId: previous.activeMaskLayerId,
+        maskPast: state.maskPast.slice(0, -1),
+        maskFuture: [
+          {
+            maskLayers: state.maskLayers,
+            activeMaskLayerId: state.activeMaskLayerId,
+          },
+          ...state.maskFuture,
+        ].slice(0, HISTORY_LIMIT),
+      };
+    }
+
+    case "redoMask": {
+      if (!state.maskFuture.length) return state;
+
+      const next = state.maskFuture[0]!;
+
+      return {
+        ...state,
+        maskLayers: next.maskLayers,
+        activeMaskLayerId: next.activeMaskLayerId,
+        maskPast: [
+          ...state.maskPast,
+          {
+            maskLayers: state.maskLayers,
+            activeMaskLayerId: state.activeMaskLayerId,
+          },
+        ].slice(-HISTORY_LIMIT),
+        maskFuture: state.maskFuture.slice(1),
+      };
+    }
     case "addMaskLayer": {
       const id = crypto.randomUUID();
       const name = `Area ${state.maskLayers.length + 1}`;
+
       return {
         ...state,
+        ...pushMaskHistory(state),
         maskLayers: [
           ...state.maskLayers,
-          { id, name, strokes: [], adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS } },
+          {
+            id,
+            name,
+            strokes: [],
+            adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS },
+          },
         ],
         activeMaskLayerId: id,
       };
     }
-    case "deleteMaskLayer":
+
+    case "deleteMaskLayer": {
+      if (!state.maskLayers.some((layer) => layer.id === action.id)) {
+        return state;
+      }
+
       return {
         ...state,
-        maskLayers: state.maskLayers.filter((l) => l.id !== action.id),
+        ...pushMaskHistory(state),
+        maskLayers: state.maskLayers.filter((layer) => layer.id !== action.id),
         activeMaskLayerId: state.activeMaskLayerId === action.id ? null : state.activeMaskLayerId,
       };
+    }
     case "setActiveMaskLayer":
       return { ...state, activeMaskLayerId: action.id };
     case "setMaskMode":
@@ -276,6 +356,7 @@ type EditorApi = {
   setMaskMode: (mode: "paint" | "erase") => void;
   paintMaskStroke: (id: string, stroke: MaskStroke) => void;
   setMaskLayerAdjustment: (id: string, key: keyof LocalAdjustments, value: number) => void;
+  recordMaskHistory: () => void;
 };
 
 const EditorContext = createContext<EditorApi | null>(null);
@@ -332,7 +413,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
           source,
           analysis: analyzeImage(element),
           edit: saved.edit,
-          maskLayers: saved.maskLayers,
+          maskLayers: saved.maskLayers ?? [],
         });
       } catch {
         // Corrupt/unreadable saved session — fall back to the empty state
@@ -345,26 +426,40 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Autosave, debounced — avoids writing to IndexedDB on every slider frame.
+  // Autosave, debounced — avoids writing to IndexedDB on every slider frame.
   const saveTimeoutRef = useRef<number | undefined>(undefined);
+
   useEffect(() => {
     if (!state.source) return;
-    if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+
+    if (saveTimeoutRef.current !== undefined) {
+      window.clearTimeout(saveTimeoutRef.current);
+    }
+
     saveTimeoutRef.current = window.setTimeout(() => {
-      saveSession({
-        imageBlob: state.source!.blob,
-        name: state.source!.name,
-        type: state.source!.type,
+      if (!state.source) return;
+
+      void saveSession({
+        imageBlob: state.source.blob,
+        name: state.source.name,
+        type: state.source.type,
         edit: state.edit,
+        maskLayers: state.maskLayers,
       });
     }, 800);
-    return () => window.clearTimeout(saveTimeoutRef.current);
-  }, [state.source, state.edit]);
+
+    return () => {
+      if (saveTimeoutRef.current !== undefined) {
+        window.clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [state.source, state.edit, state.maskLayers]);
 
   const api = useMemo<EditorApi>(
     () => ({
       state,
-      canUndo: state.past.length > 0,
-      canRedo: state.future.length > 0,
+      canUndo: state.activeTool === "mask" ? state.maskPast.length > 0 : state.past.length > 0,
+      canRedo: state.activeTool === "mask" ? state.maskFuture.length > 0 : state.future.length > 0,
       isEdited: JSON.stringify(state.edit) !== JSON.stringify(DEFAULT_EDIT_STATE),
       setSource: (source) =>
         dispatch({ type: "setSource", source, analysis: analyzeImage(source.element) }),
@@ -386,8 +481,15 @@ export function EditorProvider({ children }: { children: ReactNode }) {
             adjustments: { ...stateRef.current.edit.adjustments, ...patch },
           },
         }),
-      undo: () => dispatch({ type: "undo" }),
-      redo: () => dispatch({ type: "redo" }),
+      undo: () =>
+        dispatch({
+          type: stateRef.current.activeTool === "mask" ? "undoMask" : "undo",
+        }),
+
+      redo: () =>
+        dispatch({
+          type: stateRef.current.activeTool === "mask" ? "redoMask" : "redo",
+        }),
       jumpToHistory: (index) => dispatch({ type: "jumpTo", index }),
       setViewport: (viewport) => dispatch({ type: "setViewport", viewport }),
       setTool: (tool) => dispatch({ type: "setTool", tool }),
@@ -401,6 +503,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       paintMaskStroke: (id, stroke) => dispatch({ type: "paintMaskStroke", id, stroke }),
       setMaskLayerAdjustment: (id, key, value) =>
         dispatch({ type: "setMaskLayerAdjustment", id, key, value }),
+      recordMaskHistory: () => dispatch({ type: "recordMaskHistory" }),
     }),
     [state, beginInteraction, endInteraction, cancelInteraction],
   );

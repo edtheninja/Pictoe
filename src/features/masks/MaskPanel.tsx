@@ -17,6 +17,7 @@ export function MaskPanel() {
     setActiveMaskLayer,
     setMaskMode,
     setMaskLayerAdjustment,
+    recordMaskHistory,
   } = useEditor();
 
   const layers = state.maskLayers;
@@ -127,6 +128,7 @@ export function MaskPanel() {
                         max={100}
                         step={1}
                         value={layer.adjustments[p.key]}
+                        onPointerDown={() => recordMaskHistory()}
                         onChange={(e) =>
                           setMaskLayerAdjustment(layer.id, p.key, Number(e.target.value))
                         }
