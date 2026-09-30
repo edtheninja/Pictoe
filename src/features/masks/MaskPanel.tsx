@@ -18,6 +18,8 @@ export function MaskPanel() {
     setMaskMode,
     setMaskLayerAdjustment,
     recordMaskHistory,
+    setMaskBrushSize,
+    setMaskBrushSoftness,
   } = useEditor();
 
   const layers = state.maskLayers;
@@ -38,6 +40,41 @@ export function MaskPanel() {
           Add area
         </button>
       </div>
+      <div className="flex flex-col gap-sm rounded-md border border-border p-sm">
+        <label className="flex items-center gap-sm text-[12px]">
+          <span className="w-20 shrink-0 text-text-secondary">Brush size</span>
+
+          <input
+            type="range"
+            min={1}
+            max={100}
+            step={1}
+            value={state.maskBrushSize}
+            onChange={(e) => setMaskBrushSize(Number(e.target.value))}
+            className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
+          />
+
+          <span className="w-8 text-right tabular-nums text-text-muted">{state.maskBrushSize}</span>
+        </label>
+
+        <label className="flex items-center gap-sm text-[12px]">
+          <span className="w-20 shrink-0 text-text-secondary">Softness</span>
+
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={state.maskBrushSoftness}
+            onChange={(e) => setMaskBrushSoftness(Number(e.target.value))}
+            className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
+          />
+
+          <span className="w-8 text-right tabular-nums text-text-muted">
+            {state.maskBrushSoftness}
+          </span>
+        </label>
+      </div>
 
       {activeId && (
         <div className="flex rounded-md border border-border bg-surface-elevated/40 p-1">
@@ -45,11 +82,10 @@ export function MaskPanel() {
             type="button"
             onClick={() => setMaskMode("paint")}
             aria-pressed={maskMode === "paint"}
-            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${
-              maskMode === "paint"
+            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${maskMode === "paint"
                 ? "bg-surface text-text-primary shadow-sm"
                 : "text-text-muted hover:text-text-secondary"
-            }`}
+              }`}
           >
             <Brush className="h-3.5 w-3.5" />
             Paint
@@ -59,11 +95,10 @@ export function MaskPanel() {
             type="button"
             onClick={() => setMaskMode("erase")}
             aria-pressed={maskMode === "erase"}
-            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${
-              maskMode === "erase"
+            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${maskMode === "erase"
                 ? "bg-surface text-text-primary shadow-sm"
                 : "text-text-muted hover:text-text-secondary"
-            }`}
+              }`}
           >
             <Eraser className="h-3.5 w-3.5" />
             Eraser
@@ -92,9 +127,8 @@ export function MaskPanel() {
           return (
             <div
               key={layer.id}
-              className={`rounded-md border px-sm py-sm transition-colors duration-150 ${
-                active ? "border-accent bg-accent/5" : "border-border"
-              }`}
+              className={`rounded-md border px-sm py-sm transition-colors duration-150 ${active ? "border-accent bg-accent/5" : "border-border"
+                }`}
             >
               <div className="flex items-center justify-between gap-sm">
                 <button

@@ -273,6 +273,7 @@ export type MaskStroke = {
   x: number;
   y: number;
   radius: number;
+  softness?: number;
   mode?: MaskStrokeMode;
 };
 

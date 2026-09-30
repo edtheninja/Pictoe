@@ -43,7 +43,8 @@ export function MaskOverlay() {
     paintMaskStroke(activeId, {
       x,
       y,
-      radius: BRUSH_RADIUS,
+      radius: state.maskBrushSize / 1000,
+      softness: state.maskBrushSoftness,
       mode,
     });
   };

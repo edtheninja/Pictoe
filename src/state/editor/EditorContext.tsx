@@ -44,6 +44,8 @@ type State = {
   maskMode: "paint" | "erase";
   maskPast: MaskSnapshot[];
   maskFuture: MaskSnapshot[];
+  maskBrushSize: number;
+  maskBrushSoftness: number;
 };
 
 type MaskSnapshot = {
@@ -67,17 +69,19 @@ const initialState: State = {
   maskMode: "paint",
   maskPast: [],
   maskFuture: [],
+  maskBrushSize: 60,
+  maskBrushSoftness: 30,
 };
 
 type Action =
   | { type: "setSource"; source: SourceImage; analysis: ImageAnalysis }
   | {
-      type: "restoreSession";
-      source: SourceImage;
-      analysis: ImageAnalysis;
-      edit: EditState;
-      maskLayers?: MaskLayer[];
-    }
+    type: "restoreSession";
+    source: SourceImage;
+    analysis: ImageAnalysis;
+    edit: EditState;
+    maskLayers?: MaskLayer[];
+  }
   | { type: "closeImage" }
   | { type: "setAdjustment"; key: AdjustmentKey; value: number }
   | { type: "commit"; snapshot: EditState }
@@ -100,7 +104,9 @@ type Action =
   | { type: "setMaskLayerAdjustment"; id: string; key: keyof LocalAdjustments; value: number }
   | { type: "recordMaskHistory" }
   | { type: "undoMask" }
-  | { type: "redoMask" };
+  | { type: "redoMask" }
+  | { type: "setMaskBrushSize"; value: number }
+  | { type: "setMaskBrushSoftness"; value: number };
 
 const HISTORY_LIMIT = 60;
 
@@ -225,6 +231,12 @@ function reducer(state: State, action: Action): State {
       return { ...state, showOriginal: action.value };
     case "recordMaskHistory":
       return { ...state, ...pushMaskHistory(state) };
+
+    case "setMaskBrushSize":
+      return { ...state, maskBrushSize: action.value };
+
+    case "setMaskBrushSoftness":
+      return { ...state, maskBrushSoftness: action.value };
 
     case "undoMask": {
       if (!state.maskPast.length) return state;
@@ -357,6 +369,8 @@ type EditorApi = {
   paintMaskStroke: (id: string, stroke: MaskStroke) => void;
   setMaskLayerAdjustment: (id: string, key: keyof LocalAdjustments, value: number) => void;
   recordMaskHistory: () => void;
+  setMaskBrushSize: (value: number) => void;
+  setMaskBrushSoftness: (value: number) => void;
 };
 
 const EditorContext = createContext<EditorApi | null>(null);
@@ -503,6 +517,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setMaskLayerAdjustment: (id, key, value) =>
         dispatch({ type: "setMaskLayerAdjustment", id, key, value }),
       recordMaskHistory: () => dispatch({ type: "recordMaskHistory" }),
+      setMaskBrushSize: (value) => dispatch({ type: "setMaskBrushSize", value }),
+      setMaskBrushSoftness: (value) => dispatch({ type: "setMaskBrushSoftness", value }),
     }),
     [state, beginInteraction, endInteraction, cancelInteraction],
   );

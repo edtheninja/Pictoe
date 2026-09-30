@@ -227,17 +227,25 @@ function rasterizeMask(w: number, h: number, strokes: MaskLayer["strokes"]): HTM
     const cy = stroke.y * h;
     const r = stroke.radius * minDim;
 
-    const grad = mctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-
-    grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.7, "rgba(255,255,255,1)");
-    grad.addColorStop(1, "rgba(255,255,255,0)");
+    const softness = Math.max(0, Math.min(100, stroke.softness ?? 30));
 
     mctx.save();
 
     mctx.globalCompositeOperation = stroke.mode === "erase" ? "destination-out" : "source-over";
 
-    mctx.fillStyle = grad;
+    if (softness === 0) {
+      mctx.fillStyle = "rgba(255,255,255,1)";
+    } else {
+      const grad = mctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+      const innerStop = 1 - softness / 100;
+
+      grad.addColorStop(0, "rgba(255,255,255,1)");
+      grad.addColorStop(innerStop, "rgba(255,255,255,1)");
+      grad.addColorStop(1, "rgba(255,255,255,0)");
+
+      mctx.fillStyle = grad;
+    }
+
     mctx.beginPath();
     mctx.arc(cx, cy, r, 0, Math.PI * 2);
     mctx.fill();
