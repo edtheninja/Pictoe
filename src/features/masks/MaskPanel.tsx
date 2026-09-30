@@ -82,10 +82,11 @@ export function MaskPanel() {
             type="button"
             onClick={() => setMaskMode("paint")}
             aria-pressed={maskMode === "paint"}
-            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${maskMode === "paint"
+            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${
+              maskMode === "paint"
                 ? "bg-surface text-text-primary shadow-sm"
                 : "text-text-muted hover:text-text-secondary"
-              }`}
+            }`}
           >
             <Brush className="h-3.5 w-3.5" />
             Paint
@@ -95,10 +96,11 @@ export function MaskPanel() {
             type="button"
             onClick={() => setMaskMode("erase")}
             aria-pressed={maskMode === "erase"}
-            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${maskMode === "erase"
+            className={`flex min-w-0 flex-1 items-center justify-center gap-xs rounded px-sm py-1.5 text-[12px] transition-colors duration-150 ${
+              maskMode === "erase"
                 ? "bg-surface text-text-primary shadow-sm"
                 : "text-text-muted hover:text-text-secondary"
-              }`}
+            }`}
           >
             <Eraser className="h-3.5 w-3.5" />
             Eraser
@@ -127,8 +129,9 @@ export function MaskPanel() {
           return (
             <div
               key={layer.id}
-              className={`rounded-md border px-sm py-sm transition-colors duration-150 ${active ? "border-accent bg-accent/5" : "border-border"
-                }`}
+              className={`rounded-md border px-sm py-sm transition-colors duration-150 ${
+                active ? "border-accent bg-accent/5" : "border-border"
+              }`}
             >
               <div className="flex items-center justify-between gap-sm">
                 <button

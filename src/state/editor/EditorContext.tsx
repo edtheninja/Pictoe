@@ -76,12 +76,12 @@ const initialState: State = {
 type Action =
   | { type: "setSource"; source: SourceImage; analysis: ImageAnalysis }
   | {
-    type: "restoreSession";
-    source: SourceImage;
-    analysis: ImageAnalysis;
-    edit: EditState;
-    maskLayers?: MaskLayer[];
-  }
+      type: "restoreSession";
+      source: SourceImage;
+      analysis: ImageAnalysis;
+      edit: EditState;
+      maskLayers?: MaskLayer[];
+    }
   | { type: "closeImage" }
   | { type: "setAdjustment"; key: AdjustmentKey; value: number }
   | { type: "commit"; snapshot: EditState }
