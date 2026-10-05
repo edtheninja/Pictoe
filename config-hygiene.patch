@@ -1,0 +1,37 @@
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 6fc5005..339026a 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -60,7 +60,7 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
+ | 2 | **Reconcile the Heal tool** | `main` has no Heal implementation. The tool is a placeholder panel saying "runs on the cloud engine". If any manual clone-stamp work exists in a local or unpushed session, it needs to be found and reconciled before more work touches `Canvas.tsx`, `CropOverlay.tsx` or the edit model | S |
+ | 3 | **Verify the mask ↔ crop limitation** | Strokes are stored *normalised to the output frame at the time of painting*. Changing the crop afterwards shifts masks relative to the picture content. Confirm current behaviour, then choose: lock crop while masks exist, warn, or re-map strokes | M |
+ | 4 | **Cache rasterised masks** | Every render re-rasterises *all strokes of all layers* onto fresh canvases. Long brush sessions will get slower. Cache one mask canvas per layer, invalidated only when its strokes change | M |
+-| 5 | **Config hygiene** | Remove the `vite-tsconfig-paths` plugin (Vite 8 supports `resolve.tsconfigPaths: true` natively; the dev server warns about it on every start). Rename the package from `tanstack_start_ts` to `pictoe`. Fix or consciously accept the 7 lint warnings | S |
++| 5 | **Config hygiene** | **Correction:** the `vite-tsconfig-paths` plugin cannot simply be removed. It is a required peer dependency of `@lovable.dev/vite-tanstack-config`, and the repo's `vite.config.ts` does not add it itself. The dev-server warning stays until that wrapper is upgraded or replaced (see item 6). Package renamed `tanstack_start_ts` → `pictoe` ✅. Fix or consciously accept the 7 lint warnings | S |
+ | 6 | **Decide on Lovable coupling** | `AGENTS.md` and `.lovable/` still tie the repo to Lovable (and warn against rewriting pushed history). `reportLovableError` is a no-op outside the Lovable editor preview. Decide whether to stay connected or detach cleanly | S |
+ | 7 | **First automated tests** | See M7. Even 10 tests on the reducer and parser would have caught several of the regressions found only by manual checks during development | M |
+ 
+diff --git a/bun.lock b/bun.lock
+index 0eedc05..61ae113 100644
+--- a/bun.lock
++++ b/bun.lock
+@@ -3,7 +3,7 @@
+   "configVersion": 1,
+   "workspaces": {
+     "": {
+-      "name": "tanstack_start_ts",
++      "name": "pictoe",
+       "dependencies": {
+         "@hookform/resolvers": "^5.2.2",
+         "@radix-ui/react-accordion": "^1.2.12",
+diff --git a/package.json b/package.json
+index 3b0efef..d22b5ea 100644
+--- a/package.json
++++ b/package.json
+@@ -1,5 +1,5 @@
+ {
+-  "name": "tanstack_start_ts",
++  "name": "pictoe",
+   "private": true,
+   "sideEffects": false,
+   "type": "module",
