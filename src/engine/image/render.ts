@@ -1,4 +1,6 @@
 import type { EditState, MaskLayer, Adjustments } from "@/types/editor";
+import type { MaskStroke } from "@/types/editor";
+import { MaskCache } from "./maskCache";
 
 /**
  * Pure rendering engine. Knows nothing about React.
@@ -210,16 +212,23 @@ function buildLocalFilter(a: { exposure: number; contrast: number; saturation: n
   ].join(" ");
 }
 
-/** Rasterizes a layer's brush strokes (normalized to the current output
- *  frame) into a soft-edged alpha mask at the exact w×h being rendered —
- *  resolution-independent, so a mask painted on a small preview lines up
- *  correctly at full export resolution. */
-function rasterizeMask(w: number, h: number, strokes: MaskLayer["strokes"]): HTMLCanvasElement {
-  const maskCanvas = document.createElement("canvas");
-  maskCanvas.width = w;
-  maskCanvas.height = h;
+function createMaskCanvas(w: number, h: number): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  return canvas;
+}
 
-  const mctx = maskCanvas.getContext("2d")!;
+/** Draws brush strokes (normalized to the output frame) onto a mask canvas.
+ *  Strokes are composited in order, so drawing only new strokes onto an
+ *  existing canvas gives the same result as redrawing all of them. */
+function drawMaskStrokes(
+  canvas: HTMLCanvasElement,
+  w: number,
+  h: number,
+  strokes: readonly MaskStroke[],
+) {
+  const mctx = canvas.getContext("2d")!;
   const minDim = Math.min(w, h);
 
   for (const stroke of strokes) {
@@ -252,8 +261,16 @@ function rasterizeMask(w: number, h: number, strokes: MaskLayer["strokes"]): HTM
 
     mctx.restore();
   }
+}
 
-  return maskCanvas;
+/** Preview masks are cached per layer. Exports skip the cache so a full-resolution
+ *  mask isn't kept in memory afterwards. Resolution-independent either way. */
+const previewMaskCache = new MaskCache<HTMLCanvasElement>(createMaskCanvas, drawMaskStrokes);
+
+function rasterizeMask(w: number, h: number, strokes: readonly MaskStroke[]): HTMLCanvasElement {
+  const canvas = createMaskCanvas(w, h);
+  drawMaskStrokes(canvas, w, h, strokes);
+  return canvas;
 }
 
 /**
@@ -263,7 +280,14 @@ function rasterizeMask(w: number, h: number, strokes: MaskLayer["strokes"]): HTM
  * painted area via destination-in compositing, then composites the result
  * back onto the main render target.
  */
-function applyMaskLayer(ctx: Ctx2D, target: RenderTarget, w: number, h: number, layer: MaskLayer) {
+function applyMaskLayer(
+  ctx: Ctx2D,
+  target: RenderTarget,
+  w: number,
+  h: number,
+  layer: MaskLayer,
+  cached: boolean,
+) {
   if (layer.strokes.length === 0) return;
 
   const temp = document.createElement("canvas");
@@ -285,7 +309,9 @@ function applyMaskLayer(ctx: Ctx2D, target: RenderTarget, w: number, h: number, 
     tctx.restore();
   }
 
-  const mask = rasterizeMask(w, h, layer.strokes);
+  const mask = cached
+    ? previewMaskCache.get(layer.id, layer.strokes, w, h)
+    : rasterizeMask(w, h, layer.strokes);
   tctx.globalCompositeOperation = "destination-in";
   tctx.drawImage(mask, 0, 0);
 
@@ -349,8 +375,13 @@ export function renderImage(
   sharpen(ctx, target, w, h, edit.adjustments.sharpness);
 
   if (maskLayers) {
+    // Only interactive previews (which pass maxDimension) use the cache.
+    const cached = maxDimension !== undefined;
+    // Prune only when masks are actually supplied, so holding "compare with
+    // original" (which passes none) doesn't throw the cache away.
+    if (cached) previewMaskCache.prune(maskLayers.map((l) => l.id));
     for (const layer of maskLayers) {
-      applyMaskLayer(ctx, target, w, h, layer);
+      applyMaskLayer(ctx, target, w, h, layer, cached);
     }
   }
 
