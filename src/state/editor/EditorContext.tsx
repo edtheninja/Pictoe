@@ -533,3 +533,9 @@ export function useEditor() {
 }
 
 export type { CropRect };
+
+// Exposed for unit tests; the app itself reaches the reducer through useEditor().
+// TODO: move the reducer into its own file so this suppression can go.
+// eslint-disable-next-line react-refresh/only-export-components
+export { reducer as editorReducer, initialState as editorInitialState };
+export type { State as EditorState, Action as EditorAction };
