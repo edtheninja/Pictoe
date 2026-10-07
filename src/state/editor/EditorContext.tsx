@@ -27,6 +27,7 @@ import {
 } from "@/types/editor";
 import { analyzeImage } from "@/engine/image/analyze";
 import { saveSession, loadSession, clearSession } from "@/engine/storage/session";
+import { frameOf, migrateLegacyLayers } from "@/engine/image/maskSpace";
 
 type State = {
   source: SourceImage | null;
@@ -427,7 +428,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
           source,
           analysis: analyzeImage(element),
           edit: saved.edit,
-          maskLayers: saved.maskLayers ?? [],
+          maskLayers:
+            saved.maskSpace === "source"
+              ? (saved.maskLayers ?? [])
+              : migrateLegacyLayers(
+                  saved.maskLayers ?? [],
+                  frameOf(source.width, source.height, saved.edit),
+                ),
         });
       } catch {
         // Corrupt/unreadable saved session — fall back to the empty state
@@ -458,6 +465,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
         type: state.source.type,
         edit: state.edit,
         maskLayers: state.maskLayers,
+        maskSpace: "source",
       });
     }, 800);
 

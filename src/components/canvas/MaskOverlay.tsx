@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { useEditor } from "@/state/editor/EditorContext";
+import { frameOf, outputToSource, radiusToSource } from "@/engine/image/maskSpace";
 
 const BRUSH_RADIUS = 0.06; // normalized to min(width, height) of the current output frame
 const MIN_STROKE_SPACING = 0.015; // skip near-duplicate points during a fast drag
@@ -40,10 +41,17 @@ export function MaskOverlay() {
 
     lastPointRef.current = { x, y };
 
+    // Strokes are stored relative to the source image, so they stay attached to the
+    // picture if the crop, rotation or flip changes later.
+    const source = state.source;
+    if (!source) return;
+    const frame = frameOf(source.width, source.height, state.edit);
+    const at = outputToSource({ x, y }, frame);
+
     paintMaskStroke(activeId, {
-      x,
-      y,
-      radius: state.maskBrushSize / 1000,
+      x: at.x,
+      y: at.y,
+      radius: radiusToSource(state.maskBrushSize / 1000, frame),
       softness: state.maskBrushSoftness,
       mode,
     });

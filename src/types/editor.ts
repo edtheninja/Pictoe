@@ -269,6 +269,11 @@ export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
 
 export type MaskStrokeMode = "paint" | "erase";
 
+/**
+ * x and y are relative to the SOURCE image (0–1 across its width and height) and radius is a
+ * fraction of its shorter side, so masks stay attached to the picture when the crop, rotation
+ * or flip change. See engine/image/maskSpace.ts.
+ */
 export type MaskStroke = {
   x: number;
   y: number;

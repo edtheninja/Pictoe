@@ -1,6 +1,14 @@
 import type { EditState, MaskLayer, Adjustments } from "@/types/editor";
 import type { MaskStroke } from "@/types/editor";
 import { MaskCache } from "./maskCache";
+import {
+  frameOf,
+  frameOutputSize,
+  maskFrameKey,
+  radiusToPixels,
+  sourceToOutput,
+  type MaskFrame,
+} from "./maskSpace";
 
 /**
  * Pure rendering engine. Knows nothing about React.
@@ -227,14 +235,16 @@ function drawMaskStrokes(
   w: number,
   h: number,
   strokes: readonly MaskStroke[],
+  frame: MaskFrame,
 ) {
   const mctx = canvas.getContext("2d")!;
-  const minDim = Math.min(w, h);
+  const scale = w / frameOutputSize(frame).width;
 
   for (const stroke of strokes) {
-    const cx = stroke.x * w;
-    const cy = stroke.y * h;
-    const r = stroke.radius * minDim;
+    const p = sourceToOutput(stroke, frame);
+    const cx = p.x * w;
+    const cy = p.y * h;
+    const r = radiusToPixels(stroke.radius, frame, scale);
 
     const softness = Math.max(0, Math.min(100, stroke.softness ?? 30));
 
@@ -265,11 +275,20 @@ function drawMaskStrokes(
 
 /** Preview masks are cached per layer. Exports skip the cache so a full-resolution
  *  mask isn't kept in memory afterwards. Resolution-independent either way. */
-const previewMaskCache = new MaskCache<HTMLCanvasElement>(createMaskCanvas, drawMaskStrokes);
+const previewMaskCache = new MaskCache<HTMLCanvasElement, MaskFrame>(
+  createMaskCanvas,
+  drawMaskStrokes,
+  maskFrameKey,
+);
 
-function rasterizeMask(w: number, h: number, strokes: readonly MaskStroke[]): HTMLCanvasElement {
+function rasterizeMask(
+  w: number,
+  h: number,
+  strokes: readonly MaskStroke[],
+  frame: MaskFrame,
+): HTMLCanvasElement {
   const canvas = createMaskCanvas(w, h);
-  drawMaskStrokes(canvas, w, h, strokes);
+  drawMaskStrokes(canvas, w, h, strokes, frame);
   return canvas;
 }
 
@@ -287,6 +306,7 @@ function applyMaskLayer(
   h: number,
   layer: MaskLayer,
   cached: boolean,
+  frame: MaskFrame,
 ) {
   if (layer.strokes.length === 0) return;
 
@@ -310,8 +330,8 @@ function applyMaskLayer(
   }
 
   const mask = cached
-    ? previewMaskCache.get(layer.id, layer.strokes, w, h)
-    : rasterizeMask(w, h, layer.strokes);
+    ? previewMaskCache.get(layer.id, layer.strokes, w, h, frame)
+    : rasterizeMask(w, h, layer.strokes, frame);
   tctx.globalCompositeOperation = "destination-in";
   tctx.drawImage(mask, 0, 0);
 
@@ -377,11 +397,12 @@ export function renderImage(
   if (maskLayers) {
     // Only interactive previews (which pass maxDimension) use the cache.
     const cached = maxDimension !== undefined;
+    const frame = frameOf(srcW, srcH, edit);
     // Prune only when masks are actually supplied, so holding "compare with
     // original" (which passes none) doesn't throw the cache away.
     if (cached) previewMaskCache.prune(maskLayers.map((l) => l.id));
     for (const layer of maskLayers) {
-      applyMaskLayer(ctx, target, w, h, layer, cached);
+      applyMaskLayer(ctx, target, w, h, layer, cached, frame);
     }
   }
 

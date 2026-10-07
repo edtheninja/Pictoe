@@ -11,6 +11,8 @@ export type SavedSession = {
   type: string;
   edit: EditState;
   maskLayers?: MaskLayer[];
+  /** "source": strokes are relative to the source image. Absent in older saves (relative to the visible frame). */
+  maskSpace?: "source";
 };
 
 function openDb(): Promise<IDBDatabase> {
