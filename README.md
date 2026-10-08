@@ -6,7 +6,7 @@ Pictoe is a canvas-first image editor that gives you professional control withou
 
 The idea behind it is **progressive power**: complexity is revealed when you need it, never removed. The image stays the centre of attention, and the interface stays quiet.
 
-> **Status:** active development · milestones 1–5 complete and most of 6 · type-check and production build pass · no automated tests yet
+> **Status:** active development · milestones 1–5 complete and most of 6 · type-check and production build pass · 62 unit tests
 > **Docs:** [PRD.md](./PRD.md) (what and why) · [ROADMAP.md](./ROADMAP.md) (what's next)
 
 ---
@@ -64,6 +64,8 @@ Then open <http://localhost:8080>.
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build (targets Cloudflare via the Nitro `cloudflare-module` preset) |
 | `npm run preview` | Preview the production build |
+| `npm test` | Run the unit tests (Vitest) |
+| `npm run test:watch` | Re-run tests as you edit |
 | `npm run lint` | Run ESLint |
 | `npm run format` | Run Prettier |
 
@@ -88,7 +90,7 @@ Engine          pure TypeScript, no React
 **Design rules**
 - The original image is immutable.
 - The preview and the export use the same pipeline, so what you see is what you get. The preview is downscaled to what the screen can show; export uses full resolution.
-- Local areas are stored as **resolution-independent brush strokes**, so a mask painted on a small preview lines up exactly at export size.
+- Local areas are stored as **resolution-independent brush strokes**, so a mask painted on a small preview lines up exactly at export size. They are stored relative to the original image, so they stay on the same part of the picture when you crop, rotate or flip.
 - No image-processing logic lives in UI components.
 
 **Stack:** React 19 · TypeScript · Vite 8 · TanStack Router / Start · Tailwind CSS 4 · Radix UI · lucide-react · React Query · Zod
@@ -124,10 +126,9 @@ src/
 Being upfront about what isn't finished:
 
 - **Heal tool is a placeholder.** The panel exists, but nothing heals yet.
-- **No automated tests.** Quality so far has relied on type-checking, builds and manual checks.
+- **Limited automated tests.** 62 unit tests cover undo/redo history, local areas, the intent parser, the mask cache, mask coordinates and where the renderer draws mask brushes. The UI, the renderer's pixel output and end-to-end flows are not tested yet.
 - **Browser coverage is unverified.** The renderer uses the canvas `filter` API for exposure, contrast, saturation and blur. Support varies by browser, so Safari and iOS need testing.
-- **Heavy pixel work runs on the main thread** (sharpening, per-colour saturation, local-area compositing), and every render redraws all mask strokes. Very large photos or long brush sessions may feel slow.
-- **Local areas and crop.** Masks are stored relative to the frame at the time you painted. Changing the crop afterwards may shift them.
+- **Heavy pixel work runs on the main thread** (sharpening, per-colour saturation, local-area compositing). Very large photos may feel slow.
 - **Touch support is partial.** No pinch-to-zoom yet, and painting local areas is pointer-only (no keyboard alternative).
 - **One image at a time.** Session restore holds a single photo.
 - **Tonal controls are an approximation.** Highlights, shadows, whites and blacks use blend layers rather than true luminosity masks.
@@ -140,7 +141,7 @@ The full plan, with effort and dependencies, is in [ROADMAP.md](./ROADMAP.md). T
 
 | Stage | Focus |
 |---|---|
-| **Stabilise** | Refresh docs, add the first tests, cache rendered masks, resolve the crop/mask limitation, config clean-up |
+| **Stabilise** | Mostly done: docs refreshed, first tests added, masks cached, masks now follow crop/rotation/flip. Remaining: lint warnings, confirming the recent mask work in a browser |
 | **M7 · Quality & reach** | Test suite and CI, cross-browser verification, pinch-zoom and touch gestures, move pixel work off the main thread, accessibility pass |
 | **M8 · Local editing depth** | Gradient and radial masks, mask management (rename, duplicate, reorder, invert), more per-area controls, full HSL, curves, colour grading, accurate tonal controls |
 | **M9 · Heal** | Local spot-heal and clone-stamp, stored as non-destructive strokes |
@@ -160,7 +161,7 @@ Social feeds, profiles, community, a template marketplace, collaboration, cloud 
 
 ## Contributing
 
-The project is in early development. Before a larger change, read [PRD.md](./PRD.md) and [ROADMAP.md](./ROADMAP.md). Run `npm run lint` and `npm run build` before pushing; there is no test suite yet.
+The project is in early development. Before a larger change, read [PRD.md](./PRD.md) and [ROADMAP.md](./ROADMAP.md). Run `npm test`, `npm run lint` and `npm run build` before pushing.
 
 ## Licence
 

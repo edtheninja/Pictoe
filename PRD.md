@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Version** | 1.0 |
-| **Date** | 3 October 2026 |
+| **Date** | 7 October 2026 |
 | **Owner** | Adnan Ansari |
-| **Status** | Living document. Reflects `main` @ `218b661` |
+| **Status** | Living document. Reflects `main` @ `d140ea3` |
 | **Related** | [ROADMAP.md](./ROADMAP.md) · [README.md](./README.md) |
 
 > **How to read this document.** Status columns describe what is in the repository today (verified by type-check, build and code inspection; the newest local-mask commits were not exercised in a browser). Targets marked *proposed* are suggestions: nothing in the product is instrumented, so none of them has been measured. User descriptions in §3 are hypotheses drawn from the original product brief, not research findings.
@@ -110,7 +110,7 @@ User accounts · social features · collaboration · cloud galleries · template
 | FR-31 | Eraser, adjustable brush size and softness | P1 | ✅ |
 | FR-32 | Area undo/redo (scoped to the Local tool) and persistence across sessions | P1 | ✅ |
 | FR-33 | Gradient and radial masks; invert, duplicate, reorder, rename, show/hide | P2 | ⬜ |
-| FR-34 | Masks remain correctly placed if the crop changes afterwards | P1 | ⚠️ Verify. Strokes are stored relative to the output frame at paint time |
+| FR-34 | Masks remain correctly placed if the crop changes afterwards | P1 | ✅ Strokes are stored relative to the source image (unit-tested; confirm by eye) |
 | FR-35 | More per-area parameters (highlights, shadows, clarity, sharpness, tint) | P2 | ⬜ |
 
 ### E. History
@@ -170,7 +170,7 @@ User accounts · social features · collaboration · cloud galleries · template
 - Slider drags feel immediate on a typical 12 MP photo on a mid-range laptop (*proposed:* ≥ 30 fps preview).
 - Interactive preview is **downscaled to what the viewport can show**; full resolution is used only at export (already the design).
 - Export of a ~24 MP photo completes in a few seconds (*proposed:* under 5 s).
-- **Known pressure points:** sharpening, colour-band saturation and mask compositing are synchronous main-thread pixel loops, and every render re-rasterises all mask strokes. See the roadmap (M6.5 / M7).
+- **Known pressure points:** sharpening, colour-band saturation and mask compositing are synchronous main-thread pixel loops. Mask rasterisation is now cached per layer. See the roadmap (M7).
 
 ### Privacy
 - **Image data is never uploaded.** There are no accounts.
@@ -269,10 +269,10 @@ See [ROADMAP.md](./ROADMAP.md) for sequencing, effort and dependencies.
 | Risk | Impact | Mitigation |
 |---|---|---|
 | Canvas `ctx.filter` support varies by browser | Adjustments could silently do nothing | Cross-browser test early (M7); add a fallback path if needed |
-| Main-thread pixel loops and per-render mask re-rasterisation | Sluggish editing on large photos | Mask caching (M6.5); Worker / WebGL (M7) |
-| Masks misalign after a crop change | Wrong region edited | Verify, then lock crop, warn, or re-map strokes (M6.5) |
+| Main-thread pixel loops and per-render mask re-rasterisation | Sluggish editing on large photos | Mask caching (done); Worker / WebGL (M7) |
+| Masks misalign after a crop change | Wrong region edited | Fixed: strokes are stored in source space (unit-tested); confirm by eye |
 | Tonal controls are an approximation | Weakens the "pro" claim | Luminosity-masked rewrite (M8) |
-| No automated tests | Regressions found only by hand | Test suite and CI (M7) |
+| Limited automated tests | UI and renderer-output regressions found only by hand | 62 unit tests exist; extend to render and end-to-end checks and add CI (M7) |
 | Cloud AI: cost, key custody, privacy | Security and trust exposure | Server-side keys only; explicit consent; decide provider before building (M11) |
 | Scope creep | Dilutes the product | The feature-discipline rule in §4 |
 | Rust backend slows a solo developer | Cloud work stalls | B0 spike compared with a thin TS gateway before committing |

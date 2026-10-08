@@ -1,6 +1,6 @@
 # Pictoe — Roadmap
 
-> **Snapshot:** 3 October 2026 · `main` @ `218b661`
+> **Snapshot:** 7 October 2026 · `main` @ `d140ea3`
 > **Companion docs:** [PRD.md](./PRD.md) (what and why) · [README.md](./README.md) (what exists today)
 > **Effort key (rough, one developer):** **S** under a day · **M** 1–3 days · **L** a week or more
 > **Backend:** a Rust service is planned as a parallel track, see [Backend track](#backend-track--rust-service-runs-in-parallel-with-m7m12)
@@ -16,7 +16,7 @@
 | TypeScript (`tsc --noEmit`) | ✅ 0 errors |
 | Production build (`vite build`) | ✅ Passes |
 | ESLint | ✅ 0 errors, 7 warnings (all `react-refresh/only-export-components`) |
-| Automated tests | ❌ None exist, and there is no `test` script |
+| Automated tests | 🟡 62 unit tests (Vitest): history, local areas, intent parser, mask cache, mask coordinates, renderer brush placement. No UI or end-to-end tests yet |
 | Size | ~4,100 lines across 39 source files (excluding generated routes and UI primitives) |
 | Outbound network calls | Google Fonts (Inter) only. Image data is never uploaded |
 
@@ -58,11 +58,11 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 |---|---|---|---|
 | 1 | **Update the README** | It still lists *masks / brush adjustments* and *HSL* under "Not built yet" and as unchecked roadmap items. Both now exist (HSL only as per-band saturation, so keep Curves, full HSL and colour grading as future) | S |
 | 2 | **Reconcile the Heal tool** | `main` has no Heal implementation. The tool is a placeholder panel saying "runs on the cloud engine". If any manual clone-stamp work exists in a local or unpushed session, it needs to be found and reconciled before more work touches `Canvas.tsx`, `CropOverlay.tsx` or the edit model | S |
-| 3 | **Verify the mask ↔ crop limitation** | Strokes are stored *normalised to the output frame at the time of painting*. Changing the crop afterwards shifts masks relative to the picture content. Confirm current behaviour, then choose: lock crop while masks exist, warn, or re-map strokes | M |
-| 4 | **Cache rasterised masks** | Every render re-rasterises *all strokes of all layers* onto fresh canvases. Long brush sessions will get slower. Cache one mask canvas per layer, invalidated only when its strokes change | M |
+| 3 | ✅ **Masks follow crop, rotation and flip** | Strokes are now stored relative to the *source image* and converted to the visible frame at draw time. Older saved sessions are converted when loaded. Unit-tested against the renderer's own canvas transform. **Still to confirm by eye in a browser** | ✅ |
+| 4 | ✅ **Mask rendering cache** | One rasterised mask per layer; painting draws only the new stroke (300 stroke-draws instead of about 45,000 over a 300-stroke session); exports skip the cache | ✅ |
 | 5 | **Config hygiene** | **Correction:** the `vite-tsconfig-paths` plugin cannot simply be removed. It is a required peer dependency of `@lovable.dev/vite-tanstack-config`, and the repo's `vite.config.ts` does not add it itself. The dev-server warning stays until that wrapper is upgraded or replaced (see item 6). Package renamed `tanstack_start_ts` → `pictoe` ✅. Fix or consciously accept the 7 lint warnings | S |
 | 6 | **Decide on Lovable coupling** | `AGENTS.md` and `.lovable/` still tie the repo to Lovable (and warn against rewriting pushed history). `reportLovableError` is a no-op outside the Lovable editor preview. Decide whether to stay connected or detach cleanly | S |
-| 7 | **First automated tests** | See M7. Even 10 tests on the reducer and parser would have caught several of the regressions found only by manual checks during development | M |
+| 7 | ✅ **First automated tests** | Vitest with 62 tests; more to add in M7 | ✅ |
 
 ---
 
@@ -72,7 +72,7 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 
 **Goal:** make what exists trustworthy on more devices and for more people.
 
-- [ ] **Test suite + CI** (M). Targets in priority order:
+- [ ] **Test suite + CI** (M). Started: 62 unit tests already cover reducer history and local areas, the intent parser, the mask cache, mask coordinates and renderer brush placement. Remaining targets, in priority order:
   - Reducer: `undo` / `redo` / `jumpTo`, mask history, `closeImage`, `restoreSession`
   - `parseIntent` (rules, intensity words, cloud-only detection) and `analysisSuggestion` thresholds
   - `analyzeImage` against synthetic dark / bright / warm / cool images
