@@ -16,7 +16,7 @@
 | TypeScript (`tsc --noEmit`) | ✅ 0 errors |
 | Production build (`vite build`) | ✅ Passes |
 | ESLint | ✅ 0 errors, 7 warnings (all `react-refresh/only-export-components`) |
-| Automated tests | 🟡 62 unit tests (Vitest): history, local areas, intent parser, mask cache, mask coordinates, renderer brush placement. No UI or end-to-end tests yet |
+| Automated tests | 🟡 83 unit tests (Vitest): history, local areas, intent parser, mask cache, mask coordinates, renderer brush placement. No UI or end-to-end tests yet |
 | Size | ~4,100 lines across 39 source files (excluding generated routes and UI primitives) |
 | Outbound network calls | Google Fonts (Inter) only. Image data is never uploaded |
 
@@ -62,7 +62,7 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 | 4 | ✅ **Mask rendering cache** | One rasterised mask per layer; painting draws only the new stroke (300 stroke-draws instead of about 45,000 over a 300-stroke session); exports skip the cache | ✅ |
 | 5 | **Config hygiene** | **Correction:** the `vite-tsconfig-paths` plugin cannot simply be removed. It is a required peer dependency of `@lovable.dev/vite-tanstack-config`, and the repo's `vite.config.ts` does not add it itself. The dev-server warning stays until that wrapper is upgraded or replaced (see item 6). Package renamed `tanstack_start_ts` → `pictoe` ✅. Fix or consciously accept the 7 lint warnings | S |
 | 6 | **Decide on Lovable coupling** | `AGENTS.md` and `.lovable/` still tie the repo to Lovable (and warn against rewriting pushed history). `reportLovableError` is a no-op outside the Lovable editor preview. Decide whether to stay connected or detach cleanly | S |
-| 7 | ✅ **First automated tests** | Vitest with 62 tests; more to add in M7 | ✅ |
+| 7 | ✅ **First automated tests** | Vitest with 83 tests; more to add in M7 | ✅ |
 
 ---
 
@@ -72,14 +72,14 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 
 **Goal:** make what exists trustworthy on more devices and for more people.
 
-- [ ] **Test suite + CI** (M). Started: 62 unit tests already cover reducer history and local areas, the intent parser, the mask cache, mask coordinates and renderer brush placement. Remaining targets, in priority order:
+- [ ] **Test suite + CI** (M). Started: 83 unit tests already cover reducer history and local areas, the intent parser, the mask cache, mask coordinates and renderer brush placement. Remaining targets, in priority order:
   - Reducer: `undo` / `redo` / `jumpTo`, mask history, `closeImage`, `restoreSession`
   - `parseIntent` (rules, intensity words, cloud-only detection) and `analysisSuggestion` thresholds
   - `analyzeImage` against synthetic dark / bright / warm / cool images
   - History label diffing (`summarizeChange`)
   - A render smoke test (known input → expected pixel ranges)
   - Playwright e2e: import → edit → undo → export → reload → restored
-- [ ] **Cross-browser verification** (M). The render pipeline depends on Canvas `ctx.filter` for exposure, contrast, saturation and blur. Support has historically varied, especially in Safari/iOS. Test Safari and iOS before promising mobile support; if needed, add a fallback path (pixel math or WebGL)
+- [ ] **Cross-browser verification** (M). **Found:** Safari and iOS Safari ship canvas `ctx.filter` disabled by default (caniuse: Safari 18.0 through 26.x), so every filter-based adjustment would have silently done nothing there. **Done:** feature detection plus a pixel-maths fallback (`canvasFilter.ts`), unit-tested against the CSS filter formulas. **Still to do:** try it on real Safari and iOS devices; check WebP export (Safari may not encode WebP from a canvas and may return PNG instead); check session restore and touch behaviour
 - [ ] **Touch gestures** (M). Pinch-to-zoom and two-finger pan do not exist (canvas supports wheel zoom and single-pointer drag only)
 - [ ] **Move heavy pixel work off the main thread** (L). Sharpening, colour-band saturation and mask compositing all loop over pixels synchronously. Options: `OffscreenCanvas` + Worker, WebGL/WebGPU, or Rust compiled to WASM in a Worker (see Backend track)
 - [ ] **Large-image guardrails** (S). Max decode size, memory-safe export path, clear message instead of a crash on very large files

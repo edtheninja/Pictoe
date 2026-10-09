@@ -1,5 +1,12 @@
 import type { EditState, MaskLayer, Adjustments } from "@/types/editor";
 import type { MaskStroke } from "@/types/editor";
+import {
+  applyFilterFallback,
+  filterString,
+  NO_FILTER,
+  supportsCanvasFilter,
+  type FilterParams,
+} from "./canvasFilter";
 import { MaskCache } from "./maskCache";
 import {
   frameOf,
@@ -32,19 +39,16 @@ export function outputSize(srcW: number, srcH: number, edit: EditState) {
   };
 }
 
-function buildFilter(a: Adjustments, scale: number): string {
+function buildFilterParams(a: Adjustments, scale: number): FilterParams {
   const brightness = 1 + (a.exposure / 100) * 0.55 + (a.brightness / 100) * 0.4;
   const contrast = 1 + (a.contrast / 100) * 0.6 + (a.clarity / 100) * 0.25;
   const saturate = Math.max(0, 1 + a.saturation / 100 + (a.vibrance / 100) * 0.5);
-  const blurPx = (a.blur / 100) * 24 * scale;
-
-  const parts = [
-    `brightness(${clamp(brightness, 0.05, 4).toFixed(4)})`,
-    `contrast(${clamp(contrast, 0.05, 4).toFixed(4)})`,
-    `saturate(${saturate.toFixed(4)})`,
-  ];
-  if (blurPx > 0.15) parts.push(`blur(${blurPx.toFixed(2)}px)`);
-  return parts.join(" ");
+  return {
+    brightness: clamp(brightness, 0.05, 4),
+    contrast: clamp(contrast, 0.05, 4),
+    saturate,
+    blurPx: (a.blur / 100) * 24 * scale,
+  };
 }
 
 function clamp(v: number, min: number, max: number) {
@@ -72,8 +76,10 @@ function sharpen(ctx: Ctx2D, target: RenderTarget, w: number, h: number, amount:
   if (!blurCtx) return;
 
   const radius = 1 + (amount / 100) * 3;
-  blurCtx.filter = `blur(${radius.toFixed(2)}px)`;
+  const nativeBlur = supportsCanvasFilter();
+  if (nativeBlur) blurCtx.filter = `blur(${radius.toFixed(2)}px)`;
   blurCtx.drawImage(target as CanvasImageSource, 0, 0, w, h);
+  if (!nativeBlur) applyFilterFallback(blurCtx, w, h, { ...NO_FILTER, blurPx: radius });
   const blurred = blurCtx.getImageData(0, 0, w, h);
 
   const strength = (amount / 100) * 1.4;
@@ -209,15 +215,19 @@ function applyColorBandSaturation(ctx: Ctx2D, w: number, h: number, a: Adjustmen
 /** Same three CSS filters as buildFilter, but for a mask layer's four
  *  parameters — no clarity/vibrance/blur, since local areas keep a smaller,
  *  more contained parameter set than global adjustments. */
-function buildLocalFilter(a: { exposure: number; contrast: number; saturation: number }): string {
+function buildLocalFilterParams(a: {
+  exposure: number;
+  contrast: number;
+  saturation: number;
+}): FilterParams {
   const brightness = 1 + (a.exposure / 100) * 0.55;
   const contrast = 1 + (a.contrast / 100) * 0.6;
-  const saturate = Math.max(0, 1 + a.saturation / 100);
-  return [
-    `brightness(${clamp(brightness, 0.05, 4).toFixed(4)})`,
-    `contrast(${clamp(contrast, 0.05, 4).toFixed(4)})`,
-    `saturate(${saturate.toFixed(4)})`,
-  ].join(" ");
+  return {
+    ...NO_FILTER,
+    brightness: clamp(brightness, 0.05, 4),
+    contrast: clamp(contrast, 0.05, 4),
+    saturate: Math.max(0, 1 + a.saturation / 100),
+  };
 }
 
 function createMaskCanvas(w: number, h: number): HTMLCanvasElement {
@@ -316,9 +326,12 @@ function applyMaskLayer(
   const tctx = temp.getContext("2d") as CanvasRenderingContext2D | null;
   if (!tctx) return;
 
-  tctx.filter = buildLocalFilter(layer.adjustments);
+  const localFilter = buildLocalFilterParams(layer.adjustments);
+  const nativeLocal = supportsCanvasFilter();
+  if (nativeLocal) tctx.filter = filterString(localFilter);
   tctx.drawImage(target as CanvasImageSource, 0, 0, w, h);
-  tctx.filter = "none";
+  if (nativeLocal) tctx.filter = "none";
+  else applyFilterFallback(tctx, w, h, localFilter);
 
   if (Math.abs(layer.adjustments.temperature) > 0.5) {
     tctx.save();
@@ -374,7 +387,12 @@ export function renderImage(
 
   ctx.translate(-edit.crop.x * rotW, -edit.crop.y * rotH);
 
-  ctx.filter = buildFilter(edit.adjustments, Math.max(w, h) / Math.max(out.width, out.height));
+  const filterParams = buildFilterParams(
+    edit.adjustments,
+    Math.max(w, h) / Math.max(out.width, out.height),
+  );
+  const nativeFilter = supportsCanvasFilter();
+  if (nativeFilter) ctx.filter = filterString(filterParams);
   (ctx as CanvasRenderingContext2D).imageSmoothingQuality = "high";
 
   ctx.translate(rotW / 2, rotH / 2);
@@ -384,6 +402,8 @@ export function renderImage(
   const dh = swap ? rotW : rotH;
   ctx.drawImage(source, -dw / 2, -dh / 2, dw, dh);
   ctx.restore();
+  // Safari/iOS ignore ctx.filter, so apply the same chain with pixel maths instead.
+  if (!nativeFilter) applyFilterFallback(ctx, w, h, filterParams);
 
   ctx.save();
   ctx.filter = "none";

@@ -6,7 +6,7 @@ Pictoe is a canvas-first image editor that gives you professional control withou
 
 The idea behind it is **progressive power**: complexity is revealed when you need it, never removed. The image stays the centre of attention, and the interface stays quiet.
 
-> **Status:** active development · milestones 1–5 complete and most of 6 · type-check and production build pass · 62 unit tests
+> **Status:** active development · milestones 1–5 complete and most of 6 · type-check and production build pass · 83 unit tests
 > **Docs:** [PRD.md](./PRD.md) (what and why) · [ROADMAP.md](./ROADMAP.md) (what's next)
 
 ---
@@ -126,8 +126,8 @@ src/
 Being upfront about what isn't finished:
 
 - **Heal tool is a placeholder.** The panel exists, but nothing heals yet.
-- **Limited automated tests.** 62 unit tests cover undo/redo history, local areas, the intent parser, the mask cache, mask coordinates and where the renderer draws mask brushes. The UI, the renderer's pixel output and end-to-end flows are not tested yet.
-- **Browser coverage is unverified.** The renderer uses the canvas `filter` API for exposure, contrast, saturation and blur. Support varies by browser, so Safari and iOS need testing.
+- **Limited automated tests.** 83 unit tests cover undo/redo history, local areas, the intent parser, the mask cache, mask coordinates and where the renderer draws mask brushes. The UI, the renderer's pixel output and end-to-end flows are not tested yet.
+- **Safari and iOS use a slower fallback.** Those browsers ship the canvas `filter` API switched off, so Pictoe detects that and applies exposure, contrast, saturation, blur and sharpening with pixel maths instead. It is unit-tested against the CSS filter formulas but **has not been tried on a real Safari or iPhone yet**. Blur is an approximation, and large photos will be slower there.
 - **Heavy pixel work runs on the main thread** (sharpening, per-colour saturation, local-area compositing). Very large photos may feel slow.
 - **Touch support is partial.** No pinch-to-zoom yet, and painting local areas is pointer-only (no keyboard alternative).
 - **One image at a time.** Session restore holds a single photo.
