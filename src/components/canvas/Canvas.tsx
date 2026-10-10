@@ -5,6 +5,7 @@ import { DEFAULT_ADJUSTMENTS, DEFAULT_CROP } from "@/types/editor";
 import { CanvasControls } from "./CanvasControls";
 import { CropOverlay } from "./CropOverlay";
 import { MaskOverlay } from "./MaskOverlay";
+import { PinchTracker } from "./pinch";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
@@ -16,6 +17,7 @@ export function Canvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<number | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
+  const pinch = useRef(new PinchTracker(MIN_ZOOM, MAX_ZOOM)).current;
   const dragRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
 
   const isCropping = activeTool === "crop";
@@ -121,17 +123,51 @@ export function Canvas() {
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
+  // A finger can be lifted outside the canvas or the window can lose focus; don't keep phantom fingers.
+  useEffect(() => {
+    const release = (e: PointerEvent) => {
+      pinch.up(e.pointerId);
+    };
+    const clear = () => pinch.reset();
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    window.addEventListener("blur", clear);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      window.removeEventListener("blur", clear);
+    };
+  }, [pinch]);
+
+  /** Pointer position measured from the centre of the canvas, like the wheel zoom. */
+  const fromCentre = (e: { clientX: number; clientY: number }) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    return { x: e.clientX - rect.left - rect.width / 2, y: e.clientY - rect.top - rect.height / 2 };
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
+    // Two fingers always mean pinch-to-zoom and pan, whichever tool is active.
+    if (pinch.down(e.pointerId, fromCentre(e), viewport)) {
+      dragRef.current = null;
+      return;
+    }
     if (activeTool === "crop" || activeTool === "mask") return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     dragRef.current = { x: e.clientX, y: e.clientY, panX: viewport.panX, panY: viewport.panY };
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    const pinched = pinch.move(e.pointerId, fromCentre(e));
+    if (pinched) {
+      setViewport(pinched);
+      return;
+    }
     const d = dragRef.current;
     if (!d) return;
     setViewport({ panX: d.panX + (e.clientX - d.x), panY: d.panY + (e.clientY - d.y) });
   };
-  const onPointerUp = () => {
+  const onPointerUp = (e: React.PointerEvent) => {
+    pinch.up(e.pointerId);
     dragRef.current = null;
   };
 
@@ -148,7 +184,7 @@ export function Canvas() {
       aria-label="Image canvas"
     >
       <div
-        className="absolute inset-0 flex items-center justify-center"
+        className="absolute inset-0 flex touch-none items-center justify-center"
         style={{
           cursor:
             activeTool === "crop" || activeTool === "mask"
@@ -168,7 +204,10 @@ export function Canvas() {
             width: displayW,
             height: displayH,
             transform: `translate(${viewport.panX}px, ${viewport.panY}px) scale(${viewport.zoom})`,
-            transition: dragRef.current ? "none" : "transform 180ms cubic-bezier(0.22,1,0.36,1)",
+            transition:
+              dragRef.current || pinch.active
+                ? "none"
+                : "transform 180ms cubic-bezier(0.22,1,0.36,1)",
           }}
         >
           <canvas

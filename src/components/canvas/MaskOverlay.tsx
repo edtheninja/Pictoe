@@ -14,6 +14,7 @@ export function MaskOverlay() {
   const { state, paintMaskStroke, recordMaskHistory } = useEditor();
   const containerRef = useRef<HTMLDivElement>(null);
   const paintingRef = useRef(false);
+  const activePointers = useRef(new Set<number>());
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   if (state.activeTool !== "mask") return null;
@@ -65,6 +66,13 @@ export function MaskOverlay() {
         cursor: activeId ? "crosshair" : "default",
       }}
       onPointerDown={(e) => {
+        activePointers.current.add(e.pointerId);
+        // A second finger means pinch-to-zoom, not painting: stop and ignore it.
+        if (activePointers.current.size > 1) {
+          paintingRef.current = false;
+          lastPointRef.current = null;
+          return;
+        }
         if (!activeId) return;
 
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -79,11 +87,13 @@ export function MaskOverlay() {
 
         paintAt(e.clientX, e.clientY);
       }}
-      onPointerUp={() => {
+      onPointerUp={(e) => {
+        activePointers.current.delete(e.pointerId);
         paintingRef.current = false;
         lastPointRef.current = null;
       }}
-      onPointerCancel={() => {
+      onPointerCancel={(e) => {
+        activePointers.current.delete(e.pointerId);
         paintingRef.current = false;
         lastPointRef.current = null;
       }}
