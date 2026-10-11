@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useEditor } from "@/state/editor/EditorContext";
 import { exportImage } from "@/engine/image/render";
+import { canEncode, resolveExportOutcome } from "@/engine/image/exportFormat";
 import type { ExportFormat, ExportQuality } from "@/types/editor";
 
 const FORMATS: { value: ExportFormat; label: string; ext: string }[] = [
@@ -23,12 +24,30 @@ export function ExportControl() {
   const [qualityMode, setQualityMode] = useState<ExportQuality>("high");
   const [customQuality, setCustomQuality] = useState(80); // percent, 1–100
   const [open, setOpen] = useState(false);
+  // Which formats this browser can really save (Safari can't encode WebP). Unknown until probed.
+  const [encodable, setEncodable] = useState<Record<string, boolean>>({});
+  const [notice, setNotice] = useState<string | null>(null);
   const busy = state.processing === "exporting";
 
   const quality =
     qualityMode === "custom"
       ? customQuality / 100
       : QUALITY_PRESETS.find((p) => p.key === qualityMode)!.value;
+
+  useEffect(() => {
+    let alive = true;
+    Promise.all(FORMATS.map(async (f) => [f.value, await canEncode(f.value)] as const)).then(
+      (results) => {
+        if (!alive) return;
+        const support: Record<string, boolean> = Object.fromEntries(results);
+        setEncodable(support);
+        setFormat((current) => (support[current] === false ? "image/jpeg" : current));
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const handleExport = async () => {
     if (!state.source) return;
@@ -43,16 +62,22 @@ export function ExportControl() {
         quality,
         state.maskLayers,
       );
-      const ext = FORMATS.find((f) => f.value === format)!.ext;
+      // Name the file after what the browser actually produced, not just what was asked for.
+      const outcome = resolveExportOutcome(format, blob);
       const base = state.source.name.replace(/\.[^.]+$/, "");
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${base}-pictoe.${ext}`;
+      a.download = `${base}-pictoe.${outcome.extension}`;
       a.click();
       URL.revokeObjectURL(url);
       setProcessing("idle");
-      setOpen(false);
+      if (outcome.message) {
+        setNotice(outcome.message); // keep the popover open so the note is seen
+      } else {
+        setNotice(null);
+        setOpen(false);
+      }
     } catch {
       setProcessing("error");
       setError("Pictoe couldn't save this image. Try a different format or a smaller size.");
@@ -83,9 +108,18 @@ export function ExportControl() {
               <button
                 key={f.value}
                 type="button"
-                onClick={() => setFormat(f.value)}
+                onClick={() => {
+                  setFormat(f.value);
+                  setNotice(null);
+                }}
+                disabled={encodable[f.value] === false}
+                title={
+                  encodable[f.value] === false
+                    ? `${f.label} isn't supported by this browser`
+                    : undefined
+                }
                 aria-pressed={format === f.value}
-                className={`flex-1 rounded-md border px-sm py-1.5 text-[12px] transition-colors duration-150 ${format === f.value ? "border-accent text-accent" : "border-border text-text-secondary hover:text-text-primary"}`}
+                className={`flex-1 rounded-md border px-sm py-1.5 text-[12px] transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${format === f.value ? "border-accent text-accent" : "border-border text-text-secondary hover:text-text-primary"}`}
               >
                 {f.label}
               </button>
@@ -148,6 +182,11 @@ export function ExportControl() {
           >
             {busy ? "Preparing…" : "Save image"}
           </button>
+          {notice && (
+            <p role="status" className="mt-sm text-[12px] text-text-secondary">
+              {notice}
+            </p>
+          )}
           <p className="mt-sm text-[11px] text-text-muted">Your original file is never modified.</p>
         </Popover.Content>
       </Popover.Portal>

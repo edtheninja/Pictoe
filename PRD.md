@@ -151,7 +151,7 @@ User accounts · social features · collaboration · cloud galleries · template
 ### J. Export
 | ID | Requirement | P | Status |
 |---|---|---|---|
-| FR-90 | Export JPG, PNG, WebP with quality presets (High / Medium / Small) and a custom 1–100% slider (JPG/WebP) | P0 | ✅ |
+| FR-90 | Export JPG, PNG, WebP with quality presets (High / Medium / Small) and a custom 1–100% slider (JPG/WebP); WebP is disabled where the browser can't encode it, and files are named for their real format | P0 | ✅ |
 | FR-91 | Original never modified; local areas included in the exported image | P0 | ✅ |
 | FR-92 | Resolution scaling, filename template, metadata/EXIF option, colour-profile handling | P2 | ⬜ |
 | FR-93 | Batch apply and batch export | P2 | ⬜ |
@@ -272,7 +272,7 @@ See [ROADMAP.md](./ROADMAP.md) for sequencing, effort and dependencies.
 | Main-thread pixel loops and per-render mask re-rasterisation | Sluggish editing on large photos | Mask caching (done); Worker / WebGL (M7) |
 | Masks misalign after a crop change | Wrong region edited | Fixed: strokes are stored in source space (unit-tested); confirm by eye |
 | Tonal controls are an approximation | Weakens the "pro" claim | Luminosity-masked rewrite (M8) |
-| Limited automated tests | UI and renderer-output regressions found only by hand | 96 unit tests exist; extend to render and end-to-end checks and add CI (M7) |
+| Limited automated tests | UI and renderer-output regressions found only by hand | 105 unit tests exist; extend to render and end-to-end checks and add CI (M7) |
 | Cloud AI: cost, key custody, privacy | Security and trust exposure | Server-side keys only; explicit consent; decide provider before building (M11) |
 | Scope creep | Dilutes the product | The feature-discipline rule in §4 |
 | Rust backend slows a solo developer | Cloud work stalls | B0 spike compared with a thin TS gateway before committing |
