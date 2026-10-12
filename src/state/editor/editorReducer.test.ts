@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { editorInitialState, editorReducer as reducer, type EditorState } from "./EditorContext";
+import { editorInitialState, editorReducer as reducer, type EditorState } from "./editorReducer";
 import { DEFAULT_EDIT_STATE, type MaskStroke } from "@/types/editor";
 
 const fresh = (): EditorState => ({ ...editorInitialState });

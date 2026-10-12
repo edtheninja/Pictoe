@@ -32,9 +32,17 @@ export default tseslint.config(
           ],
         },
       ],
-      "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
+      "react-refresh/only-export-components": [
+        "warn",
+        { allowConstantExport: true, allowExportNames: ["useEditor"] },
+      ],
       "@typescript-eslint/no-unused-vars": "off",
     },
+  },
+  {
+    // Generated shadcn/ui primitives export components together with their style variants by design.
+    files: ["src/components/ui/**/*.{ts,tsx}"],
+    rules: { "react-refresh/only-export-components": "off" },
   },
   eslintPluginPrettier,
 );

@@ -114,7 +114,7 @@ src/
 │   ├── masks/       MaskPanel
 │   └── presets/     PresetsPanel, builtinPresets
 ├── hooks/           keyboard shortcuts, responsive helpers
-├── state/editor/    EditorContext
+\1EditorContext (React wiring, session), editorReducer (history, local areas)
 ├── types/editor.ts  shared types and defaults
 └── routes/          TanStack Router routes
 ```
@@ -141,7 +141,7 @@ The full plan, with effort and dependencies, is in [ROADMAP.md](./ROADMAP.md). T
 
 | Stage | Focus |
 |---|---|
-| **Stabilise** | Mostly done: docs refreshed, first tests added, masks cached, masks now follow crop/rotation/flip. Remaining: lint warnings, confirming the recent mask work in a browser |
+| **Stabilise** | Mostly done: docs refreshed, first tests added, masks cached, masks now follow crop/rotation/flip. Remaining: confirming the recent mask, Safari and touch work on real devices |
 | **M7 · Quality & reach** | Test suite and CI, cross-browser verification, pinch-zoom and touch gestures, move pixel work off the main thread, accessibility pass |
 | **M8 · Local editing depth** | Gradient and radial masks, mask management (rename, duplicate, reorder, invert), more per-area controls, full HSL, curves, colour grading, accurate tonal controls |
 | **M9 · Heal** | Local spot-heal and clone-stamp, stored as non-destructive strokes |
