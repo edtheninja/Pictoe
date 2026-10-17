@@ -150,7 +150,7 @@ The full plan, with effort and dependencies, is in [ROADMAP.md](./ROADMAP.md). T
 | **M12 · Ship** | Hosting, PWA/offline, privacy-friendly analytics, docs site |
 
 ### Planned Rust backend
-Local editing will always work without a network. For the features that can't run in a browser (M11), the plan is an **optional Rust service** (axum + tokio) that acts as a gateway to AI providers: keys stay server-side, jobs are cancellable, images are processed briefly and deleted, and nothing is stored or logged. A short spike (**B0**) will compare it with a thin TypeScript gateway before the project commits. Rust may also be used in the browser, compiled to WebAssembly, if profiling shows the pixel loops are the bottleneck.
+Local editing will always work without a network. For the features that can't run in a browser (M11), the plan is an **optional Rust service** (axum + tokio) that acts as a gateway to AI providers: keys stay server-side, jobs are cancellable, images are processed briefly and deleted, and nothing is stored or logged. A first spike (**B0**) now lives in [`backend/`](./backend): a job API with strict validation, a CORS allowlist, size limits, real cancellation and graceful shutdown, covered by 23 tests. It contains no AI yet. Whether to commit to Rust still depends on the comparison described in [`backend/README.md`](./backend/README.md). Rust may also be used in the browser, compiled to WebAssembly, if profiling shows the pixel loops are the bottleneck.
 
 ### Not planned
 Social feeds, profiles, community, a template marketplace, collaboration, cloud galleries, an AI *chat* assistant, generative image creation from scratch, a full RAW pipeline, and native mobile apps.

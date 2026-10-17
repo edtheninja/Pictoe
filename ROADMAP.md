@@ -195,6 +195,8 @@ Planned capabilities (all already **recognised and honestly labelled as unavaila
 | **B5** | **Server-side image ops** *(only if needed)* | Batch export/resize, format conversion (e.g. HEIC/AVIF decode for FR-04), thumbnails | M–L |
 | **B6** | **Operations** | Deploy, staging env, health checks, metrics and alerts, cost dashboard, load test, secret rotation, `cargo audit` / `cargo deny` | M |
 
+**Status (B0 spike built):** `backend/` contains a working service: `GET /health`, `POST/GET/DELETE /jobs`, strict JSON validation, CORS allowlist, request-size limit and timeout, active-job cap, finished-job expiry, real cancellation, graceful shutdown, and a uniform human-readable error shape. It has 23 tests and was also run as a real release binary. It has **no AI and no fake results**: cloud-only operations return an honest `501`. **B1 remaining:** Dockerfile and CI. **B2 remaining:** OpenAPI + generated TypeScript types, and the non-destructive-results decision. **B0 go/no-go is still open:** the spike shows Rust is comfortable here, not that it is faster for the product (see `backend/README.md`).
+
 **Editor-side integration**
 - [ ] `src/engine/cloud/` client using the generated types; a `useCloudJob` hook with states `idle → uploading → processing → ready | failed | cancelled`
 - [ ] Connectivity: browser online state plus a health ping. Disable cloud-only actions with the existing *"your current edits remain safe"* copy
