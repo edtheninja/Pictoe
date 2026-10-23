@@ -19,6 +19,7 @@ import {
   type SourceImage,
   type ToolId,
   type Viewport,
+  type HealStroke,
 } from "@/types/editor";
 import { editorInitialState, editorReducer, type EditorState } from "./editorReducer";
 import { analyzeImage } from "@/engine/image/analyze";
@@ -62,6 +63,12 @@ type EditorApi = {
   recordMaskHistory: () => void;
   setMaskBrushSize: (value: number) => void;
   setMaskBrushSoftness: (value: number) => void;
+  /** Clone tool. addHealStroke is live; bracket a drag with beginInteraction/endInteraction. */
+  addHealStroke: (stroke: HealStroke) => void;
+  setHealBrushSize: (value: number) => void;
+  setHealBrushSoftness: (value: number) => void;
+  setHealSource: (source: { x: number; y: number } | null) => void;
+  setHealOffset: (offset: { dx: number; dy: number } | null) => void;
 };
 
 const EditorContext = createContext<EditorApi | null>(null);
@@ -117,7 +124,8 @@ export function EditorProvider({ children }: { children: ReactNode }) {
           type: "restoreSession",
           source,
           analysis: analyzeImage(element),
-          edit: saved.edit,
+          // Older saves have no clone strokes; fill in anything they lack.
+          edit: { ...DEFAULT_EDIT_STATE, ...saved.edit },
           maskLayers:
             saved.maskSpace === "source"
               ? (saved.maskLayers ?? [])
@@ -217,6 +225,11 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       recordMaskHistory: () => dispatch({ type: "recordMaskHistory" }),
       setMaskBrushSize: (value) => dispatch({ type: "setMaskBrushSize", value }),
       setMaskBrushSoftness: (value) => dispatch({ type: "setMaskBrushSoftness", value }),
+      addHealStroke: (stroke) => dispatch({ type: "addHealStroke", stroke }),
+      setHealBrushSize: (value) => dispatch({ type: "setHealBrushSize", value }),
+      setHealBrushSoftness: (value) => dispatch({ type: "setHealBrushSoftness", value }),
+      setHealSource: (source) => dispatch({ type: "setHealSource", source }),
+      setHealOffset: (offset) => dispatch({ type: "setHealOffset", offset }),
     }),
     [state, beginInteraction, endInteraction, cancelInteraction],
   );

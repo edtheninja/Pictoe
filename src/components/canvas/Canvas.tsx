@@ -4,6 +4,7 @@ import { useEditor } from "@/state/editor/EditorContext";
 import { DEFAULT_ADJUSTMENTS, DEFAULT_CROP } from "@/types/editor";
 import { CanvasControls } from "./CanvasControls";
 import { CropOverlay } from "./CropOverlay";
+import { HealOverlay } from "./HealOverlay";
 import { MaskOverlay } from "./MaskOverlay";
 import { PinchTracker } from "./pinch";
 
@@ -59,6 +60,7 @@ export function Canvas() {
         const previewEdit = {
           ...edit,
           adjustments: showOriginal ? { ...DEFAULT_ADJUSTMENTS } : edit.adjustments,
+          healStrokes: showOriginal ? [] : edit.healStrokes,
           crop: isCropping ? { ...DEFAULT_CROP } : edit.crop,
         };
         renderImage(
@@ -152,7 +154,7 @@ export function Canvas() {
       dragRef.current = null;
       return;
     }
-    if (activeTool === "crop" || activeTool === "mask") return;
+    if (activeTool === "crop" || activeTool === "mask" || activeTool === "heal") return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     dragRef.current = { x: e.clientX, y: e.clientY, panX: viewport.panX, panY: viewport.panY };
   };
@@ -187,7 +189,7 @@ export function Canvas() {
         className="absolute inset-0 flex touch-none items-center justify-center"
         style={{
           cursor:
-            activeTool === "crop" || activeTool === "mask"
+            activeTool === "crop" || activeTool === "mask" || activeTool === "heal"
               ? "default"
               : dragRef.current
                 ? "grabbing"
@@ -217,6 +219,7 @@ export function Canvas() {
           />
           {activeTool === "crop" && <CropOverlay />}
           {isMasking && <MaskOverlay />}
+          {activeTool === "heal" && <HealOverlay />}
         </div>
       </div>
 

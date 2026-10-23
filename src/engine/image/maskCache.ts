@@ -1,4 +1,5 @@
 import type { MaskStroke } from "@/types/editor";
+import { planStrokeUpdate } from "./incremental";
 
 type Entry<C> = {
   w: number;
@@ -25,16 +26,7 @@ export function planMaskUpdate(
   frameKey: string,
 ): MaskCachePlan {
   if (!entry || entry.w !== w || entry.h !== h || entry.frameKey !== frameKey) return "rebuild";
-  if (entry.strokes === strokes) return "reuse";
-
-  const cachedCount = entry.strokes.length;
-  // Fewer (or the same number of) strokes but a different array means an undo
-  // or redo swapped in another snapshot; start over rather than guess.
-  if (strokes.length <= cachedCount) return "rebuild";
-  for (let i = 0; i < cachedCount; i++) {
-    if (strokes[i] !== entry.strokes[i]) return "rebuild";
-  }
-  return "append";
+  return planStrokeUpdate(entry.strokes, strokes);
 }
 
 /**

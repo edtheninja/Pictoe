@@ -13,6 +13,10 @@ function summarizeChange(prev: EditState, next: EditState): string {
     return "Crop / rotate";
   }
 
+  if (prev.healStrokes?.length !== next.healStrokes?.length) {
+    return "Clone";
+  }
+
   const changed = (Object.keys(next.adjustments) as AdjustmentKey[])
     .filter((k) => next.adjustments[k] !== prev.adjustments[k])
     .map((k) => ({ key: k, delta: next.adjustments[k] - prev.adjustments[k] }));

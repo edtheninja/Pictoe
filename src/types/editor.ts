@@ -28,11 +28,26 @@ export type AdjustmentKey = keyof Adjustments;
 export type CropRect = { x: number; y: number; width: number; height: number };
 
 /** The full, serializable, non-destructive description of an edit. */
+/**
+ * One dab of the clone stamp, relative to the SOURCE image: (x, y) is where it paints and it
+ * copies from (x + dx, y + dy), all as 0–1 across the source's width and height. radius is a
+ * fraction of the source's shorter side. See engine/image/cloneStamp.ts.
+ */
+export type HealStroke = {
+  x: number;
+  y: number;
+  dx: number;
+  dy: number;
+  radius: number;
+  softness: number; // 0 hard edge … 100 fully feathered
+};
+
 export type EditState = {
   adjustments: Adjustments;
   crop: CropRect; // normalized 0..1 relative to the (rotated) source
   rotation: number; // degrees, multiples of 90
   flipH: boolean;
+  healStrokes: HealStroke[];
 };
 
 export type Viewport = { zoom: number; panX: number; panY: number };
@@ -93,6 +108,7 @@ export const DEFAULT_EDIT_STATE: EditState = {
   crop: { ...DEFAULT_CROP },
   rotation: 0,
   flipH: false,
+  healStrokes: [],
 };
 
 export type AdjustmentDef = {

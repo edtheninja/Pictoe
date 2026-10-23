@@ -8,7 +8,7 @@ const TOOLS: { id: ToolId; label: string; icon: React.ComponentType<{ className?
   { id: "detail", label: "Detail", icon: Focus },
   { id: "crop", label: "Crop", icon: Crop },
   { id: "mask", label: "Local", icon: Brush },
-  { id: "heal", label: "Heal", icon: Stamp },
+  { id: "heal", label: "Clone", icon: Stamp },
   { id: "intent", label: "Intent", icon: Sparkles },
   { id: "presets", label: "Presets", icon: Palette },
 ];

@@ -7,6 +7,7 @@ import {
   supportsCanvasFilter,
   type FilterParams,
 } from "./canvasFilter";
+import { healedSource } from "./healedSource";
 import { MaskCache } from "./maskCache";
 import {
   frameOf,
@@ -366,6 +367,10 @@ export function renderImage(
   maskLayers?: MaskLayer[],
 ) {
   const out = outputSize(srcW, srcH, edit);
+  // Clone strokes are applied to a cached copy of the source, before crop, rotation and filters.
+  const drawSource = edit.healStrokes?.length
+    ? healedSource.get(source, srcW, srcH, edit.healStrokes)
+    : source;
   let scale = 1;
   if (maxDimension) scale = Math.min(1, maxDimension / Math.max(out.width, out.height));
 
@@ -400,7 +405,7 @@ export function renderImage(
   if (edit.flipH) ctx.scale(-1, 1);
   const dw = swap ? rotH : rotW;
   const dh = swap ? rotW : rotH;
-  ctx.drawImage(source, -dw / 2, -dh / 2, dw, dh);
+  ctx.drawImage(drawSource, -dw / 2, -dh / 2, dw, dh);
   ctx.restore();
   // Safari/iOS ignore ctx.filter, so apply the same chain with pixel maths instead.
   if (!nativeFilter) applyFilterFallback(ctx, w, h, filterParams);

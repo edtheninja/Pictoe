@@ -9,6 +9,7 @@ import {
   DEFAULT_LOCAL_ADJUSTMENTS,
   type AdjustmentKey,
   type EditState,
+  type HealStroke,
   type ImageAnalysis,
   type LocalAdjustments,
   type MaskLayer,
@@ -37,6 +38,12 @@ type State = {
   maskFuture: MaskSnapshot[];
   maskBrushSize: number;
   maskBrushSoftness: number;
+  healBrushSize: number;
+  healBrushSoftness: number;
+  /** Where the clone tool copies from, as 0–1 across the source image. Null until chosen. */
+  healSource: { x: number; y: number } | null;
+  /** Fixed once painting starts so later strokes keep the same relationship to the source. */
+  healOffset: { dx: number; dy: number } | null;
 };
 
 type MaskSnapshot = {
@@ -62,6 +69,10 @@ const initialState: State = {
   maskFuture: [],
   maskBrushSize: 60,
   maskBrushSoftness: 30,
+  healBrushSize: 40,
+  healBrushSoftness: 30,
+  healSource: null,
+  healOffset: null,
 };
 
 type Action =
@@ -97,7 +108,12 @@ type Action =
   | { type: "undoMask" }
   | { type: "redoMask" }
   | { type: "setMaskBrushSize"; value: number }
-  | { type: "setMaskBrushSoftness"; value: number };
+  | { type: "setMaskBrushSoftness"; value: number }
+  | { type: "addHealStroke"; stroke: HealStroke }
+  | { type: "setHealBrushSize"; value: number }
+  | { type: "setHealBrushSoftness"; value: number }
+  | { type: "setHealSource"; source: { x: number; y: number } | null }
+  | { type: "setHealOffset"; offset: { dx: number; dy: number } | null };
 
 const HISTORY_LIMIT = 60;
 
@@ -176,6 +192,7 @@ function reducer(state: State, action: Action): State {
           crop: { ...DEFAULT_CROP },
           rotation: 0,
           flipH: false,
+          healStrokes: [],
         },
         ...pushHistory(state, state.edit),
       };
@@ -228,6 +245,22 @@ function reducer(state: State, action: Action): State {
 
     case "setMaskBrushSoftness":
       return { ...state, maskBrushSoftness: action.value };
+    // Live, like painting a mask stroke: no history entry per dab. The overlay brackets a whole
+    // drag with beginInteraction/endInteraction so it becomes one undo step.
+    case "addHealStroke":
+      return {
+        ...state,
+        edit: { ...state.edit, healStrokes: [...state.edit.healStrokes, action.stroke] },
+      };
+    case "setHealBrushSize":
+      return { ...state, healBrushSize: action.value };
+    case "setHealBrushSoftness":
+      return { ...state, healBrushSoftness: action.value };
+    // Choosing a new source starts over, so the old offset no longer applies.
+    case "setHealSource":
+      return { ...state, healSource: action.source, healOffset: null };
+    case "setHealOffset":
+      return { ...state, healOffset: action.offset };
 
     case "undoMask": {
       if (!state.maskPast.length) return state;

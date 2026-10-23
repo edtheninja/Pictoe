@@ -1,8 +1,8 @@
-import { WifiOff } from "lucide-react";
 import { useEditor } from "@/state/editor/EditorContext";
 import { AdjustmentGroup } from "@/features/adjustments/AdjustmentGroup";
 import { CropTool } from "@/features/crop/CropTool";
 import { IntentBar } from "@/features/intent/IntentBar";
+import { HealPanel } from "@/features/heal/HealPanel";
 import { PresetsPanel } from "@/features/presets/PresetsPanel";
 import { MaskPanel } from "@/features/masks/MaskPanel";
 import { BeforeAfter } from "./BeforeAfter";
@@ -12,7 +12,7 @@ const TITLES: Record<string, string> = {
   color: "Color",
   detail: "Detail",
   crop: "Crop & rotate",
-  heal: "Heal",
+  heal: "Clone",
   intent: "Intent",
   presets: "Presets",
   mask: "Local areas",
@@ -55,15 +55,7 @@ export function AdjustmentPanel() {
         {tool === "intent" && <IntentBar />}
         {tool === "presets" && <PresetsPanel />}
         {tool === "mask" && <MaskPanel />}
-        {tool === "heal" && (
-          <div className="flex items-start gap-sm text-[13px] text-text-secondary">
-            <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" aria-hidden="true" />
-            <p>
-              Healing and object removal run on Pictoe's cloud engine and need an internet
-              connection. They're coming next — your current edits remain safe.
-            </p>
-          </div>
-        )}
+        {tool === "heal" && <HealPanel />}
       </div>
     </section>
   );
