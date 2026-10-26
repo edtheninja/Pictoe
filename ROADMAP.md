@@ -57,7 +57,7 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 | # | Item | Why it matters | Effort |
 |---|---|---|---|
 | 1 | **Update the README** | It still lists *masks / brush adjustments* and *HSL* under "Not built yet" and as unchecked roadmap items. Both now exist (HSL only as per-band saturation, so keep Curves, full HSL and colour grading as future) | S |
-| 2 | **Reconcile the Heal tool** | `main` has no Heal implementation. The tool is a placeholder panel saying "runs on the cloud engine". If any manual clone-stamp work exists in a local or unpushed session, it needs to be found and reconciled before more work touches `Canvas.tsx`, `CropOverlay.tsx` or the edit model | S |
+| 2 | ✅ **Reconcile the Heal tool** | Resolved: the clone-stamp work is on `main` (see M9). The panel now holds the real tool; AI-assisted heal stays cloud-only and is labelled as unavailable (M11) | ✅ |
 | 3 | ✅ **Masks follow crop, rotation and flip** | Strokes are now stored relative to the *source image* and converted to the visible frame at draw time. Older saved sessions are converted when loaded. Unit-tested against the renderer's own canvas transform. **Still to confirm by eye in a browser** | ✅ |
 | 4 | ✅ **Mask rendering cache** | One rasterised mask per layer; painting draws only the new stroke (300 stroke-draws instead of about 45,000 over a 300-stroke session); exports skip the cache | ✅ |
 | 5 | **Config hygiene** | **Correction:** the `vite-tsconfig-paths` plugin cannot simply be removed. It is a required peer dependency of `@lovable.dev/vite-tanstack-config`, and the repo's `vite.config.ts` does not add it itself. The dev-server warning stays until that wrapper is upgraded or replaced (see item 6). Package renamed `tanstack_start_ts` → `pictoe` ✅. **Lint is now fully clean:** generated shadcn files are exempt from the fast-refresh rule, and the reducer moved out of `EditorContext.tsx` into `editorReducer.ts` | S |
@@ -109,11 +109,13 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 
 **Goal:** spot healing and clone-stamp without needing a network.
 
-- [ ] Add a `HealStroke` type to the **non-destructive edit model** (source offset, radius, softness) so strokes are data, not baked pixels
-- [ ] Render pass: clone from a **snapshot taken before the write** (prevents self-copy artefacts)
-- [ ] Tap-to-set-source, drag-to-paint overlay (reuse the zoom/pan-aware coordinate mapping from `CropOverlay` / `MaskOverlay`)
-- [ ] Bundle a whole drag into a single undo step
-- [ ] Persist heal strokes with the session
+- [x] Add a `HealStroke` type to the **non-destructive edit model** (source offset, radius, softness) so strokes are data, not baked pixels
+- [x] Render pass: clone from a **snapshot taken before the write** (prevents self-copy artefacts)
+- [x] Tap-to-set-source, drag-to-paint overlay (reuse the zoom/pan-aware coordinate mapping from `CropOverlay` / `MaskOverlay`)
+- [x] Bundle a whole drag into a single undo step
+- [x] Persist heal strokes with the session
+
+**Status:** built and unit-tested (clone pixel maths, the cached source, the reducer actions, and that strokes land where the user taps for every crop, rotation and flip). **Still to confirm by eye in a browser:** the overlay, the brush ring, and pinch/pan while the Heal tool is active; and on a real phone.
 
 **Decision already made:** manual heal ships *before* any AI heal. It serves a distinct use case, delivers value immediately, and its data model becomes the foundation for the cloud layer in M11.
 
