@@ -189,3 +189,44 @@ describe("local areas", () => {
     expect(s.edit).toEqual(DEFAULT_EDIT_STATE);
   });
 });
+
+describe("clone (heal) strokes", () => {
+  const dab = (x = 0.3) => ({ x, y: 0.4, dx: 0.2, dy: 0, radius: 0.05, softness: 30 });
+
+  it("addHealStroke appends live, without touching history", () => {
+    const s = reducer(reducer(fresh(), { type: "addHealStroke", stroke: dab(0.1) }), {
+      type: "addHealStroke",
+      stroke: dab(0.2),
+    });
+    expect(s.edit.healStrokes.map((d) => d.x)).toEqual([0.1, 0.2]);
+    expect(s.past).toHaveLength(0);
+  });
+
+  it("a whole drag is one undo step", () => {
+    const base = fresh();
+    const painted = [0.1, 0.2, 0.3].reduce(
+      (st, x) => reducer(st, { type: "addHealStroke", stroke: dab(x) }),
+      base,
+    );
+    const committed = reducer(painted, { type: "commit", snapshot: base.edit });
+    expect(committed.past).toHaveLength(1);
+    const undone = reducer(committed, { type: "undo" });
+    expect(undone.edit.healStrokes).toEqual([]);
+    expect(reducer(undone, { type: "redo" }).edit.healStrokes).toHaveLength(3);
+  });
+
+  it("choosing a new source clears the offset", () => {
+    let s = reducer(fresh(), { type: "setHealSource", source: { x: 0.5, y: 0.5 } });
+    s = reducer(s, { type: "setHealOffset", offset: { dx: 0.1, dy: 0.1 } });
+    expect(s.healOffset).toEqual({ dx: 0.1, dy: 0.1 });
+    s = reducer(s, { type: "setHealSource", source: { x: 0.2, y: 0.2 } });
+    expect(s.healOffset).toBeNull();
+  });
+
+  it("resetAll removes clone strokes and can be undone", () => {
+    const painted = reducer(fresh(), { type: "addHealStroke", stroke: dab() });
+    const reset = reducer(painted, { type: "resetAll" });
+    expect(reset.edit.healStrokes).toEqual([]);
+    expect(reducer(reset, { type: "undo" }).edit.healStrokes).toHaveLength(1);
+  });
+});
