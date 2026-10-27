@@ -6,7 +6,7 @@ Pictoe is a canvas-first image editor that gives you professional control withou
 
 The idea behind it is **progressive power**: complexity is revealed when you need it, never removed. The image stays the centre of attention, and the interface stays quiet.
 
-> **Status:** active development · milestones 1–5 complete and most of 6 · type-check and production build pass · 105 unit tests
+> **Status:** active development · milestones 1–5 complete, most of 6, clone tool built (browser check pending) · type-check, lint, unit tests and production build run in CI
 > **Docs:** [PRD.md](./PRD.md) (what and why) · [ROADMAP.md](./ROADMAP.md) (what's next)
 
 ---
@@ -18,6 +18,7 @@ The idea behind it is **progressive power**: complexity is revealed when you nee
 - **Per-colour saturation** for red, orange, yellow, green, blue and purple, so you can lift the greens without touching skin tones.
 - **Crop** with aspect-ratio presets, 90° rotation and horizontal flip.
 - **Local areas ("Local" tool).** Paint a region with a brush, then give that area its own exposure, contrast, saturation and temperature. Stack as many areas as you like. The brush has adjustable size and softness, plus an eraser. Areas have their own undo/redo and are saved with your session.
+- **Clone tool.** Pick a clean area as the source, then paint over a blemish. Every stroke is saved as data, so a whole drag is one undo step and the strokes follow your crop, rotation and flip.
 - **Presets.** Five built-in looks (Warm Film, Moody B&W, Vivid Pop, Cool Blue, Soft Portrait) plus your own, saved locally.
 
 ### Control and safety
@@ -64,6 +65,7 @@ Then open <http://localhost:8080>.
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build (targets Cloudflare via the Nitro `cloudflare-module` preset) |
 | `npm run preview` | Preview the production build |
+| `npm run typecheck` | Type-check without building |
 | `npm test` | Run the unit tests (Vitest) |
 | `npm run test:watch` | Re-run tests as you edit |
 | `npm run lint` | Run ESLint |
@@ -99,22 +101,23 @@ Engine          pure TypeScript, no React
 ```
 src/
 ├── components/
-│   ├── canvas/      Canvas, CanvasControls, CropOverlay, MaskOverlay
+│   ├── canvas/      Canvas, CanvasControls, CropOverlay, MaskOverlay, HealOverlay
 │   ├── controls/    AdjustmentSlider
 │   ├── editor/      Editor, EditorHeader, HistoryPanel, AdjustmentPanel,
 │   │                BeforeAfter, ExportControl, ImportScreen, ToolDock
 │   └── ui/          Radix / shadcn-style primitives
 ├── engine/
-│   ├── image/       load, render, analyze
+│   ├── image/       load, render, analyze, cloneStamp, healedSource
 │   └── storage/     session, presets (IndexedDB)
 ├── features/
 │   ├── adjustments/ AdjustmentGroup
 │   ├── crop/        CropTool
+│   ├── heal/        HealPanel
 │   ├── intent/      IntentBar, parseIntent
 │   ├── masks/       MaskPanel
 │   └── presets/     PresetsPanel, builtinPresets
 ├── hooks/           keyboard shortcuts, responsive helpers
-\1EditorContext (React wiring, session), editorReducer (history, local areas)
+├── state/editor/    EditorContext (React wiring, session), editorReducer (history, local areas, clone strokes)
 ├── types/editor.ts  shared types and defaults
 └── routes/          TanStack Router routes
 ```
@@ -125,8 +128,8 @@ src/
 
 Being upfront about what isn't finished:
 
-- **Heal tool is a placeholder.** The panel exists, but nothing heals yet.
-- **Limited automated tests.** 105 unit tests cover undo/redo history, local areas, the intent parser, the mask cache, mask coordinates and where the renderer draws mask brushes. The UI, the renderer's pixel output and end-to-end flows are not tested yet.
+- **The clone tool is new.** Clone-stamp strokes are stored as non-destructive data and the pixel maths, undo behaviour and crop/rotate/flip handling are unit-tested, but it has **not been tried in a browser or on a touch device yet**. AI-assisted heal needs the cloud engine (M11).
+- **Limited automated tests.** Vitest covers undo/redo history, local areas, the intent parser, the mask cache, mask coordinates, where the renderer draws mask brushes, and the clone tool's pixel maths and coordinate handling. The UI, the renderer's full pixel output and end-to-end flows are not tested yet.
 - **Safari and iOS use a slower fallback.** Those browsers ship the canvas `filter` API switched off, so Pictoe detects that and applies exposure, contrast, saturation, blur and sharpening with pixel maths instead. It is unit-tested against the CSS filter formulas but **has not been tried on a real Safari or iPhone yet**. Blur is an approximation, and large photos will be slower there.
 - **Heavy pixel work runs on the main thread** (sharpening, per-colour saturation, local-area compositing). Very large photos may feel slow.
 - **Touch gestures are new.** Pinch-to-zoom and two-finger pan work in every tool. The gesture maths is unit-tested, but it has **not been tried on a real touch device yet**. Painting local areas is pointer-only, with no keyboard alternative.
@@ -144,7 +147,7 @@ The full plan, with effort and dependencies, is in [ROADMAP.md](./ROADMAP.md). T
 | **Stabilise** | Mostly done: docs refreshed, first tests added, masks cached, masks now follow crop/rotation/flip. Remaining: confirming the recent mask, Safari and touch work on real devices |
 | **M7 · Quality & reach** | Test suite and CI, cross-browser verification, pinch-zoom and touch gestures, move pixel work off the main thread, accessibility pass |
 | **M8 · Local editing depth** | Gradient and radial masks, mask management (rename, duplicate, reorder, invert), more per-area controls, full HSL, curves, colour grading, accurate tonal controls |
-| **M9 · Heal** | Local spot-heal and clone-stamp, stored as non-destructive strokes |
+| **M9 · Heal** | Clone-stamp built and unit-tested, stored as non-destructive strokes. Remaining: confirm in browsers and on a touch device. Spot-heal comes with the cloud engine (M11) |
 | **M10 · Workflow & export** | Resolution scaling, filename and metadata options, copy edits between photos, batch apply and export, preset import/export, multi-image library |
 | **M11 · Cloud AI** | Object removal, generative expansion, sky and background replacement, subject isolation, AI-assisted heal, LLM-backed intent. All **suggest → preview → approve** |
 | **M12 · Ship** | Hosting, PWA/offline, privacy-friendly analytics, docs site |
@@ -161,7 +164,7 @@ Social feeds, profiles, community, a template marketplace, collaboration, cloud 
 
 ## Contributing
 
-The project is in early development. Before a larger change, read [PRD.md](./PRD.md) and [ROADMAP.md](./ROADMAP.md). Run `npm test`, `npm run lint` and `npm run build` before pushing.
+The project is in early development. Before a larger change, read [PRD.md](./PRD.md) and [ROADMAP.md](./ROADMAP.md). Run `npm run typecheck`, `npm test`, `npm run lint` and `npm run build` before pushing; CI runs the same four.
 
 ## Licence
 

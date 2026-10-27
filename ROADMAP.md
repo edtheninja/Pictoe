@@ -72,7 +72,7 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 
 **Goal:** make what exists trustworthy on more devices and for more people.
 
-- [ ] **Test suite + CI** (M). Started: 105 unit tests already cover reducer history and local areas, the intent parser, the mask cache, mask coordinates and renderer brush placement. Remaining targets, in priority order:
+- [ ] **Test suite + CI** (M). Started: a GitHub Actions workflow (`.github/workflows/ci.yml`: frozen Bun install, typecheck, lint, tests, build) is added and passes locally from a clean install; tick this after its first green run on GitHub. `bun.lock` was out of sync with `package.json` (vitest missing) and is refreshed. Tests already cover reducer history and local areas, the intent parser, the mask cache, mask coordinates and renderer brush placement. Remaining targets, in priority order:
   - Reducer: `undo` / `redo` / `jumpTo`, mask history, `closeImage`, `restoreSession`
   - `parseIntent` (rules, intensity words, cloud-only detection) and `analysisSuggestion` thresholds
   - `analyzeImage` against synthetic dark / bright / warm / cool images
