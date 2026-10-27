@@ -115,7 +115,7 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 - [x] Bundle a whole drag into a single undo step
 - [x] Persist heal strokes with the session
 
-**Status:** built and unit-tested (clone pixel maths, the cached source, the reducer actions, and that strokes land where the user taps for every crop, rotation and flip). **Still to confirm by eye in a browser:** the overlay, the brush ring, and pinch/pan while the Heal tool is active; and on a real phone.
+**Status:** built and unit-tested (clone pixel maths, the cached source, the reducer actions, and that strokes land where the user taps for every crop, rotation and flip). **Verified in headless Chromium (27 Oct 2026, 14 scripted checks):** choose a source, paint, the hint and ring, one undo/redo per drag, persistence across a reload, and the healed spot following a 90° rotation and a flip; it also found that the keyboard shortcuts were not wired up (fixed). **Still to check on real devices:** Safari, an iPhone/Android touch screen, and two-finger pinch/pan while the Clone tool is active.
 
 **Decision already made:** manual heal ships *before* any AI heal. It serves a distinct use case, delivers value immediately, and its data model becomes the foundation for the cloud layer in M11.
 

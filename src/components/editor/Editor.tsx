@@ -4,6 +4,7 @@ import { AdjustmentPanel } from "@/components/editor/AdjustmentPanel";
 import { EditorHeader } from "@/components/editor/EditorHeader";
 import { ImportScreen } from "@/components/editor/ImportScreen";
 import { ToolDock } from "@/components/editor/ToolDock";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 export function Editor() {
   return (
@@ -15,6 +16,7 @@ export function Editor() {
 
 function EditorShell() {
   const { state } = useEditor();
+  useKeyboardShortcuts();
 
   if (!state.source) {
     return (
