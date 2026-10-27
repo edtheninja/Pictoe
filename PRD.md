@@ -275,7 +275,7 @@ See [ROADMAP.md](./ROADMAP.md) for sequencing, effort and dependencies.
 | Limited automated tests | UI and renderer-output regressions found only by hand | 105 unit tests exist; extend to render and end-to-end checks and add CI (M7) |
 | Cloud AI: cost, key custody, privacy | Security and trust exposure | Server-side keys only; explicit consent; decide provider before building (M11) |
 | Scope creep | Dilutes the product | The feature-discipline rule in §4 |
-| Rust backend slows a solo developer | Cloud work stalls | B0 spike compared with a thin TS gateway before committing |
+| Rust backend slows a solo developer | Cloud work stalls | Rust chosen after the B0 spike, knowingly; small API surface, generated TS types, and a fallback to a thin TS gateway if B3 stalls |
 | Abuse and cost with no user accounts | Unbounded spend | Rate limits, spend cap, signed anonymous tokens; decide on minimal sign-in |
 | Rust and TypeScript types drift apart | Runtime errors at the API boundary | Generate TS types from the OpenAPI spec |
 | Lovable coupling | History-rewrite hazards; unclear ownership of the sync | Decide whether to detach (M6.5) |

@@ -21,6 +21,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use tower_http::{
+    classify::ServerErrorsFailureClass,
     cors::{AllowOrigin, CorsLayer},
     timeout::TimeoutLayer,
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
@@ -79,7 +80,8 @@ pub fn app(config: Config) -> Router {
     // Method, path, status and timing are logged. Request bodies never are.
     let trace = TraceLayer::new_for_http()
         .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-        .on_response(DefaultOnResponse::new().level(Level::INFO));
+        .on_response(DefaultOnResponse::new().level(Level::INFO))
+        .on_failure(log_failure);
 
     let state = AppState {
         jobs: JobStore::new(config.max_jobs, config.finished_job_ttl),
@@ -100,6 +102,22 @@ pub fn app(config: Config) -> Router {
         .layer(cors)
         .layer(trace)
         .with_state(state)
+}
+
+/// 5xx responses are only errors worth paging on when they are *unexpected*. A refusal because
+/// the cloud engine isn't available (501) or because the service is at capacity (503) is the API
+/// working as designed, so those are warnings; anything else stays at ERROR.
+fn log_failure(class: ServerErrorsFailureClass, latency: Duration, _span: &tracing::Span) {
+    let ms = latency.as_millis();
+    match class {
+        ServerErrorsFailureClass::StatusCode(status)
+            if status == StatusCode::NOT_IMPLEMENTED
+                || status == StatusCode::SERVICE_UNAVAILABLE =>
+        {
+            tracing::warn!(%status, latency_ms = %ms, "request refused");
+        }
+        other => tracing::error!(classification = %other, latency_ms = %ms, "request failed"),
+    }
 }
 
 async fn health() -> Json<Health> {

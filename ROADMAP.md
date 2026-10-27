@@ -183,13 +183,19 @@ Planned capabilities (all already **recognised and honestly labelled as unavaila
 - For AI features the service is mostly a **gateway** to a model provider. Latency is dominated by the model and the network, not the language, so Rust won't make those features faster.
 - Rust's real wins: low memory per in-flight job, safe concurrency, predictable latency under load, one small static binary.
 - Rust matters most for **image work itself**: server-side resize/encode, batch export, mask post-processing, or running the client engine as WASM (see below).
-- Cost: slower to iterate than TypeScript for a solo developer, and the repo already has a TS server layer (TanStack Start / Nitro). **B0 is a spike so this is decided with evidence, not assumption.**
+- Cost: slower to iterate than TypeScript for a solo developer, and the repo already has a TS server layer (TanStack Start / Nitro). **B0 was a spike so this is decided with evidence, not assumption; the decision is recorded below.**
+
+**Decision (B0 closed, 27 Oct 2026): build the gateway in Rust.**
+- **Why:** Pictoe is also a portfolio piece, and a Rust service behind a clean job API is a stronger thing to show than a proxy in the same language as the front end. The spike also showed the stack is comfortable here: 23 tests pass, a 2.1 MB release binary, under 6 MB of RAM after 12,800 requests, and p99 of 6.8 ms in a local load test. That load test says the service is not slow, not that Rust is faster for the product.
+- **Cost accepted:** slower iteration than TypeScript, a second toolchain and deployment, and types that must be generated rather than shared. A thin TS gateway would have been faster to ship; this is a deliberate trade.
+- **Mitigations:** keep the API surface small (the spike's job API is the contract); generate TypeScript types from OpenAPI in B2 so the two sides can't drift; keep the editor independent of the service.
+- **Revisit trigger:** if B3's first end-to-end operation stalls, fall back to a thin TS gateway. The job API is language-neutral, so the editor-side client would not change.
 
 **Proposed stack (adjust freely):** `axum` + `tokio` · `tower-http` (CORS, tracing, timeouts, body limits) · `serde` · `reqwest` (provider calls) · `utoipa` (OpenAPI) · `tracing` · `tower_governor` (rate limits) · S3-compatible object storage · `sqlx` + Postgres only if jobs/quotas need persistence · `image` / `fast_image_resize` for server-side image ops.
 
 | ID | Stage | Scope | Effort |
 |---|---|---|---|
-| **B0** | **Decide & spike** | Choose hosting: a long-running container (Fly, Railway, VPS) vs Cloudflare Workers via `workers-rs`. Verify Workers' CPU/time limits before choosing it for image jobs. Build `/health` plus one provider-proxy endpoint, called from the editor. Compare against a thin TS gateway. Record go/no-go | M |
+| **B0** | ✅ **Decide & spike** *(decided: Rust; hosting still open)* | Choose hosting: a long-running container (Fly, Railway, VPS) vs Cloudflare Workers via `workers-rs`. Verify Workers' CPU/time limits before choosing it for image jobs. Build `/health` plus one provider-proxy endpoint, called from the editor. Compare against a thin TS gateway. Record go/no-go | M |
 | **B1** | **Skeleton** | axum app, env config, structured logs, JSON error type, CORS allowlist, request-size limit, graceful shutdown, Dockerfile, CI (`fmt`, `clippy`, `test`, build) | M |
 | **B2** | **API contract** | OpenAPI spec; **generate TypeScript types for the editor** so Rust and TS can't drift. Job model: `POST /jobs` → `202 {id}`, `GET /jobs/:id`, `DELETE /jobs/:id` (cancel). Map error codes to the existing human-readable copy. **Decide how cloud results stay non-destructive** (see below) | M |
 | **B3** | **AI gateway** | Provider adapter trait (swap providers without touching routes). Keys held server-side only. Timeouts, retry with backoff, cancellation. Per-IP / per-token rate limits and a daily spend cap. Ship one operation end to end. *Suggestion:* start with **subject segmentation → mask**, because it is non-generative and feeds the M8 mask system | L |
@@ -197,7 +203,7 @@ Planned capabilities (all already **recognised and honestly labelled as unavaila
 | **B5** | **Server-side image ops** *(only if needed)* | Batch export/resize, format conversion (e.g. HEIC/AVIF decode for FR-04), thumbnails | M–L |
 | **B6** | **Operations** | Deploy, staging env, health checks, metrics and alerts, cost dashboard, load test, secret rotation, `cargo audit` / `cargo deny` | M |
 
-**Status (B0 spike built):** `backend/` contains a working service: `GET /health`, `POST/GET/DELETE /jobs`, strict JSON validation, CORS allowlist, request-size limit and timeout, active-job cap, finished-job expiry, real cancellation, graceful shutdown, and a uniform human-readable error shape. It has 23 tests and was also run as a real release binary. It has **no AI and no fake results**: cloud-only operations return an honest `501`. **B1 remaining:** Dockerfile and CI. **B2 remaining:** OpenAPI + generated TypeScript types, and the non-destructive-results decision. **B0 go/no-go is still open:** the spike shows Rust is comfortable here, not that it is faster for the product (see `backend/README.md`).
+**Status (B0 spike built):** `backend/` contains a working service: `GET /health`, `POST/GET/DELETE /jobs`, strict JSON validation, CORS allowlist, request-size limit and timeout, active-job cap, finished-job expiry, real cancellation, graceful shutdown, and a uniform human-readable error shape. It has 23 tests and was also run as a real release binary. It has **no AI and no fake results**: cloud-only operations return an honest `501`. **B1 progress:** backend CI (fmt, clippy with warnings as errors, tests) added; expected `501`/`503` refusals now log as warnings, not errors. **B1 remaining:** Dockerfile. **B2 remaining:** OpenAPI + generated TypeScript types, and the non-destructive-results decision. **B0 go/no-go: go, with Rust** (decision above). The spike shows Rust is comfortable here, not that it is faster for the product (see `backend/README.md`).
 
 **Editor-side integration**
 - [ ] `src/engine/cloud/` client using the generated types; a `useCloudJob` hook with states `idle → uploading → processing → ready | failed | cancelled`
@@ -260,7 +266,7 @@ Port the heaviest pixel loops (sharpen, colour-band saturation, mask compositing
 | Export quality is **preset + custom slider**, not resolution scaling | Chosen explicitly; scaling stays an open item (M10) |
 | Applying a preset is a **full replace onto neutral defaults** | A preset is a complete look, not a nudge from wherever sliders currently sit |
 | Mask undo/redo is a **separate stack** scoped to the Local tool | Keeps global history snapshots small and fast |
-| **Backend language: Rust** (axum/tokio), validated by a B0 spike before full commitment | Chosen for safe concurrency and low overhead; the spike checks it against a thin TS gateway |
+| **Backend language: Rust** (axum/tokio), decided 27 Oct 2026 after the B0 spike | Chosen for portfolio value and safe concurrency, accepting slower iteration than a thin TS gateway; revisit if B3 stalls |
 | **Backend is opt-in per operation** | Preserves the local-first promise; editing never requires a network |
 | **Cloud results are stored as referenced assets, never over the source** | Keeps the original immutable and undo/reset working |
 
