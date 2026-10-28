@@ -36,8 +36,10 @@ function EditorShell() {
         </div>
       )}
 
-      <main className="relative min-h-0 flex-1 overflow-hidden lg:flex">
-        <div className="relative h-full min-w-0 overflow-hidden lg:flex-1">
+      {/* Below lg the tool panel is a sheet under the photo and the canvas takes the space that is
+          left; from lg up it is a side column. Either way the panel never covers the image. */}
+      <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+        <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
           <Canvas />
         </div>
         <AdjustmentPanel />
