@@ -67,6 +67,7 @@ Then open <http://localhost:8080>.
 | `npm run preview` | Preview the production build |
 | `npm run typecheck` | Type-check without building |
 | `npm test` | Run the unit tests (Vitest) |
+| `npm run e2e` | Run the end-to-end tests in Chromium (first time: `npx playwright install chromium`) |
 | `npm run test:watch` | Re-run tests as you edit |
 | `npm run lint` | Run ESLint |
 | `npm run format` | Run Prettier |
@@ -129,7 +130,7 @@ src/
 Being upfront about what isn't finished:
 
 - **The clone tool is new.** Clone-stamp strokes are stored as non-destructive data and the pixel maths, undo behaviour and crop/rotate/flip handling are unit-tested, but it has **not been tried in a browser or on a touch device yet**. AI-assisted heal needs the cloud engine (M11).
-- **Limited automated tests.** Vitest covers undo/redo history, local areas, the intent parser, the mask cache, mask coordinates, where the renderer draws mask brushes, and the clone tool's pixel maths and coordinate handling. The UI, the renderer's full pixel output and end-to-end flows are not tested yet.
+- **Limited automated tests.** Vitest covers undo/redo history, local areas, the intent parser, the mask cache, mask coordinates, where the renderer draws mask brushes, and the clone tool's pixel maths and coordinate handling. Playwright end-to-end tests (`e2e/`) drive the real app in Chromium: the clone tool (paint, undo/redo from the keyboard, reload, rotate and flip) and that no tool panel covers the photo on phone, tablet and desktop sizes. Safari and Firefox, real touch devices, and the other tools' flows are not covered yet.
 - **Safari and iOS use a slower fallback.** Those browsers ship the canvas `filter` API switched off, so Pictoe detects that and applies exposure, contrast, saturation, blur and sharpening with pixel maths instead. It is unit-tested against the CSS filter formulas but **has not been tried on a real Safari or iPhone yet**. Blur is an approximation, and large photos will be slower there.
 - **Heavy pixel work runs on the main thread** (sharpening, per-colour saturation, local-area compositing). Very large photos may feel slow.
 - **Touch gestures are new.** Pinch-to-zoom and two-finger pan work in every tool. The gesture maths is unit-tested, but it has **not been tried on a real touch device yet**. Painting local areas is pointer-only, with no keyboard alternative.
@@ -164,7 +165,7 @@ Social feeds, profiles, community, a template marketplace, collaboration, cloud 
 
 ## Contributing
 
-The project is in early development. Before a larger change, read [PRD.md](./PRD.md) and [ROADMAP.md](./ROADMAP.md). Run `npm run typecheck`, `npm test`, `npm run lint` and `npm run build` before pushing; CI runs the same four.
+The project is in early development. Before a larger change, read [PRD.md](./PRD.md) and [ROADMAP.md](./ROADMAP.md). Run `npm run typecheck`, `npm test`, `npm run lint` and `npm run build` before pushing; CI runs the same four, plus the end-to-end tests.
 
 ## Licence
 

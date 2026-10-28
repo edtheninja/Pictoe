@@ -33,3 +33,7 @@ dist-ssr
 
 # Rust backend build output
 backend/target/
+
+# Playwright
+test-results/
+playwright-report/
