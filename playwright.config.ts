@@ -22,7 +22,8 @@ export default defineConfig({
     launchOptions: { args: process.env["PW_NO_SANDBOX"] ? ["--no-sandbox"] : [] },
   },
   webServer: {
-    command: "bun run dev --host 127.0.0.1",
+    // npm runs package scripts everywhere (laptops and CI), whichever tool installed the packages.
+    command: "npm run dev -- --host 127.0.0.1",
     url: "http://127.0.0.1:8080",
     reuseExistingServer: !process.env["CI"],
     timeout: 120_000,
