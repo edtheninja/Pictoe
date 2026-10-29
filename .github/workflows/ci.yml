@@ -49,7 +49,9 @@ jobs:
 
   # Drives the real app in Chromium: the clone tool flow and the phone/tablet/desktop layout.
   e2e:
-    runs-on: ubuntu-latest
+    # Pinned: Playwright 1.56 supports Chromium on Ubuntu 22.04/24.04, not on the 26.04 that
+    # `ubuntu-latest` now points to. Unpin when Playwright is upgraded to a release that supports it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
