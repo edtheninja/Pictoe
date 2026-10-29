@@ -27,19 +27,30 @@ use tower_http::{
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
 use tracing::Level;
+use utoipa::{OpenApi, ToSchema};
 use uuid::Uuid;
 
 pub use config::Config;
-use error::ApiError;
+use error::{ApiError, ErrorBody};
 use jobs::{CancelOutcome, JobStatus, JobStore};
 
-/// Operations that need a real cloud model. Recognised, but not available yet.
-const CLOUD_ONLY: &[&str] = &[
-    "segment_subject",
-    "remove_object",
-    "replace_sky",
-    "expand_canvas",
-];
+/// Everything the job API recognises. This enum is the single source of truth for the names: the
+/// handler parses with it and the OpenAPI spec lists it. Only `noop` runs today; the rest need a
+/// real cloud model and are refused honestly until B3.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Operation {
+    /// Does nothing, for a moment. Exercises the job lifecycle (create, poll, cancel, expire).
+    Noop,
+    /// Cut out the main subject. Needs the cloud engine.
+    SegmentSubject,
+    /// Remove an object and fill in behind it. Needs the cloud engine.
+    RemoveObject,
+    /// Replace the sky. Needs the cloud engine.
+    ReplaceSky,
+    /// Extend the canvas past the photo's edges. Needs the cloud engine.
+    ExpandCanvas,
+}
 
 #[derive(Clone)]
 struct AppState {
@@ -47,21 +58,70 @@ struct AppState {
     noop_duration: Duration,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct Health {
+    #[schema(example = "ok")]
     status: &'static str,
+    /// The service version.
+    #[schema(example = "0.1.0")]
     version: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct JobView {
     id: Uuid,
     status: JobStatus,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct CreateJob {
+    /// What to do. Parsed leniently so an unknown name gets a clear `unknown_operation` error
+    /// instead of a generic JSON failure.
+    #[schema(value_type = Operation)]
     operation: String,
+}
+
+/// The API contract. `backend/openapi.json` is generated from this and the editor's TypeScript
+/// types are generated from that file, so Rust and TypeScript cannot drift apart silently.
+#[derive(OpenApi)]
+#[openapi(
+    paths(health, create_job, get_job, cancel_job),
+    components(schemas(
+        Health,
+        JobView,
+        JobStatus,
+        CreateJob,
+        Operation,
+        ErrorBody,
+        error::ErrorDetail,
+        error::ErrorCode
+    )),
+    modifiers(&ApiInfo),
+    tags(
+        (name = "service", description = "Is the service up?"),
+        (name = "jobs", description = "Start, poll and cancel cloud jobs.")
+    )
+)]
+pub struct ApiDoc;
+
+struct ApiInfo;
+
+impl utoipa::Modify for ApiInfo {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        openapi.info.title = "Pictoe cloud gateway".into();
+        openapi.info.version = env!("CARGO_PKG_VERSION").into();
+        openapi.info.description = Some(
+            "Optional cloud engine for Pictoe. The editor never depends on it: editing, undo and \
+             export all run in the browser. Every error has the shape `{\"error\": {\"code\", \
+             \"message\"}}`, except a `408` timeout, which has an empty body."
+                .into(),
+        );
+    }
+}
+
+/// The OpenAPI document for this service.
+pub fn openapi() -> utoipa::openapi::OpenApi {
+    ApiDoc::openapi()
 }
 
 pub fn app(config: Config) -> Router {
@@ -90,6 +150,7 @@ pub fn app(config: Config) -> Router {
 
     Router::new()
         .route("/health", get(health))
+        .route("/openapi.json", get(|| async { Json(openapi()) }))
         .route("/jobs", axum::routing::post(create_job))
         .route("/jobs/{id}", get(get_job).delete(cancel_job))
         .fallback(|| async { ApiError::not_found() })
@@ -120,6 +181,13 @@ fn log_failure(class: ServerErrorsFailureClass, latency: Duration, _span: &traci
     }
 }
 
+/// Is the service up?
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "service",
+    responses((status = 200, description = "The service is up.", body = Health))
+)]
 async fn health() -> Json<Health> {
     Json(Health {
         status: "ok",
@@ -131,6 +199,23 @@ fn parse_id(raw: &str) -> Result<Uuid, ApiError> {
     Uuid::parse_str(raw).map_err(|_| ApiError::invalid_job_id())
 }
 
+/// Start a job. Returns at once with `202`; poll `GET /jobs/{id}` (see the `Location` header).
+#[utoipa::path(
+    post,
+    path = "/jobs",
+    tag = "jobs",
+    request_body = CreateJob,
+    responses(
+        (status = 202, description = "Accepted. The job is queued.", body = JobView,
+            headers(("Location" = String, description = "Where to poll: /jobs/{id}"))),
+        (status = 400, description = "Not a JSON object with an `operation`, unreadable, or an unknown operation (`invalid_json`, `invalid_body`, `unknown_operation`).", body = ErrorBody),
+        (status = 408, description = "The request took too long. Empty body."),
+        (status = 413, description = "The request is too large (`payload_too_large`).", body = ErrorBody),
+        (status = 501, description = "The operation needs the cloud engine, which isn't available yet (`cloud_engine_unavailable`).", body = ErrorBody),
+        (status = 503, description = "Too many jobs are active (`too_many_jobs`). Retry after the number of seconds in `Retry-After`.", body = ErrorBody,
+            headers(("Retry-After" = u32, description = "Seconds to wait before retrying")))
+    )
+)]
 async fn create_job(
     State(state): State<AppState>,
     body: Result<Bytes, BytesRejection>,
@@ -151,10 +236,12 @@ async fn create_job(
     }
     let request: CreateJob = serde_json::from_value(value).map_err(|_| ApiError::invalid_json())?;
 
-    match request.operation.as_str() {
-        "noop" => {}
-        op if CLOUD_ONLY.contains(&op) => return Err(ApiError::cloud_engine_unavailable()),
-        other => return Err(ApiError::unknown_operation(other)),
+    // Parse with the enum so the names live in exactly one place.
+    match serde_json::from_value::<Operation>(serde_json::Value::String(request.operation.clone()))
+    {
+        Ok(Operation::Noop) => {}
+        Ok(_) => return Err(ApiError::cloud_engine_unavailable()),
+        Err(_) => return Err(ApiError::unknown_operation(&request.operation)),
     }
 
     let id = state
@@ -176,6 +263,18 @@ async fn create_job(
     ))
 }
 
+/// Check a job's status.
+#[utoipa::path(
+    get,
+    path = "/jobs/{id}",
+    tag = "jobs",
+    params(("id" = Uuid, Path, description = "The job id returned by `POST /jobs`")),
+    responses(
+        (status = 200, description = "The job's current status.", body = JobView),
+        (status = 400, description = "That isn't a valid job id (`invalid_job_id`).", body = ErrorBody),
+        (status = 404, description = "No such job, or it has expired (`job_not_found`).", body = ErrorBody)
+    )
+)]
 async fn get_job(
     State(state): State<AppState>,
     Path(raw): Path<String>,
@@ -185,6 +284,19 @@ async fn get_job(
     Ok(Json(JobView { id, status }))
 }
 
+/// Cancel a job that hasn't finished.
+#[utoipa::path(
+    delete,
+    path = "/jobs/{id}",
+    tag = "jobs",
+    params(("id" = Uuid, Path, description = "The job id returned by `POST /jobs`")),
+    responses(
+        (status = 204, description = "Cancelled."),
+        (status = 400, description = "That isn't a valid job id (`invalid_job_id`).", body = ErrorBody),
+        (status = 404, description = "No such job, or it has expired (`job_not_found`).", body = ErrorBody),
+        (status = 409, description = "The job had already finished (`job_already_finished`).", body = ErrorBody)
+    )
+)]
 async fn cancel_job(
     State(state): State<AppState>,
     Path(raw): Path<String>,

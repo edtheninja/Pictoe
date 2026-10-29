@@ -1,3 +1,4 @@
+import type { ApiOperation } from "@/api";
 import type { AdjustmentKey, ImageAnalysis } from "@/types/editor";
 
 export type IntentSuggestion = {
@@ -134,24 +135,34 @@ const RULES: Rule[] = [
   },
 ];
 
-const CLOUD_RULES: { match: RegExp; label: string; description: string }[] = [
+/** Each rule names the cloud operation it would request, so the Intent Bar and the API agree. */
+const CLOUD_RULES: {
+  match: RegExp;
+  operation: ApiOperation;
+  label: string;
+  description: string;
+}[] = [
   {
     match: /(remove|erase|delete)\s+(the\s+)?\w+/i,
+    operation: "remove_object",
     label: "Object removal",
     description: "Erasing objects needs Pictoe's cloud engine.",
   },
   {
     match: /(expand|extend|uncrop|outpaint)/i,
+    operation: "expand_canvas",
     label: "Generative expansion",
     description: "Expanding beyond the frame needs Pictoe's cloud engine.",
   },
   {
     match: /(replace|swap)\s+(the\s+)?(sky|background)/i,
+    operation: "replace_sky",
     label: "Sky & background replacement",
     description: "Replacement needs Pictoe's cloud engine.",
   },
   {
     match: /(cut out|isolate|mask)\s+(the\s+)?(subject|person)/i,
+    operation: "segment_subject",
     label: "Subject isolation",
     description: "Segmentation needs Pictoe's cloud engine.",
   },
@@ -168,14 +179,21 @@ export function parseIntent(
   analysis: ImageAnalysis | null = null,
 ): {
   suggestions: IntentSuggestion[];
-  cloudOnly: { label: string; description: string } | null;
+  cloudOnly: { label: string; description: string; operation: ApiOperation } | null;
 } {
   const text = input.trim();
   if (!text) return { suggestions: [], cloudOnly: null };
 
   const cloud = CLOUD_RULES.find((r) => r.match.test(text));
   if (cloud)
-    return { suggestions: [], cloudOnly: { label: cloud.label, description: cloud.description } };
+    return {
+      suggestions: [],
+      cloudOnly: {
+        label: cloud.label,
+        description: cloud.description,
+        operation: cloud.operation,
+      },
+    };
 
   const i = intensityOf(text);
   const suggestions = RULES.filter((r) => r.match.test(text)).map((r) => {

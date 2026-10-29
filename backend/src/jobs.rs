@@ -6,9 +6,11 @@ use std::{
 
 use serde::Serialize;
 use tokio::{task::AbortHandle, time::Instant};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// Where a job is in its life. `done` and `cancelled` are final.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum JobStatus {
     Queued,

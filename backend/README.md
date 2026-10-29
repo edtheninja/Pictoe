@@ -9,6 +9,24 @@ decision with evidence. It contains **no AI and no fake results**: cloud-only op
 recognised and refused with an honest message, exactly like the editor's Intent Bar. Only the
 harmless `noop` operation exercises the job lifecycle.
 
+## The API contract
+
+The Rust types are the single source of truth. `openapi.json` is generated from them, and the
+editor's TypeScript types (`../src/api/schema.d.ts`) are generated from that file. The running
+service also serves the spec at `GET /openapi.json`.
+
+After changing a route, request, response or error code:
+
+```sh
+cd backend
+cargo run --example openapi > openapi.json   # regenerate the spec
+cd .. && npm run api:types                   # regenerate the editor's types
+```
+
+`cargo test` fails if `openapi.json` is stale, and `tests/contract.rs` sends real requests and
+checks that every status, error code and header the service produces is documented (and that
+nothing documented is made up). CI fails if the editor's generated types are stale.
+
 ## Run it
 
 Needs Rust 1.85 or newer.
@@ -16,7 +34,7 @@ Needs Rust 1.85 or newer.
 ```sh
 cd backend
 cargo run                      # listens on 127.0.0.1:8787
-cargo test                     # 23 tests
+cargo test                     # 28 tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```

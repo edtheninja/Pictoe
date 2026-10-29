@@ -1,0 +1,359 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Pictoe cloud gateway",
+    "description": "Optional cloud engine for Pictoe. The editor never depends on it: editing, undo and export all run in the browser. Every error has the shape `{\"error\": {\"code\", \"message\"}}`, except a `408` timeout, which has an empty body.",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "service"
+        ],
+        "summary": "Is the service up?",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "The service is up.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "post": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Start a job. Returns at once with `202`; poll `GET /jobs/{id}` (see the `Location` header).",
+        "operationId": "create_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted. The job is queued.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Where to poll: /jobs/{id}"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a JSON object with an `operation`, unreadable, or an unknown operation (`invalid_json`, `invalid_body`, `unknown_operation`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "The request took too long. Empty body."
+          },
+          "413": {
+            "description": "The request is too large (`payload_too_large`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "The operation needs the cloud engine, which isn't available yet (`cloud_engine_unavailable`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Too many jobs are active (`too_many_jobs`). Retry after the number of seconds in `Retry-After`.",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                },
+                "description": "Seconds to wait before retrying"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jobs/{id}": {
+      "get": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Check a job's status.",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The job id returned by `POST /jobs`",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job's current status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "That isn't a valid job id (`invalid_job_id`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such job, or it has expired (`job_not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "jobs"
+        ],
+        "summary": "Cancel a job that hasn't finished.",
+        "operationId": "cancel_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The job id returned by `POST /jobs`",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cancelled."
+          },
+          "400": {
+            "description": "That isn't a valid job id (`invalid_job_id`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such job, or it has expired (`job_not_found`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The job had already finished (`job_already_finished`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateJob": {
+        "type": "object",
+        "required": [
+          "operation"
+        ],
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/Operation",
+            "description": "What to do. Parsed leniently so an unknown name gets a clear `unknown_operation` error\ninstead of a generic JSON failure."
+          }
+        }
+      },
+      "ErrorBody": {
+        "type": "object",
+        "description": "Every error leaves the service in this one shape: `{\"error\": {\"code\": \"...\", \"message\": \"...\"}}`.\nMessages are written for people, in the same plain language as the editor.",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        }
+      },
+      "ErrorCode": {
+        "type": "string",
+        "description": "Machine-readable error codes. This enum is the single source of truth: the JSON the service\nsends, the OpenAPI spec and the editor's generated TypeScript type all come from it.",
+        "enum": [
+          "invalid_json",
+          "payload_too_large",
+          "invalid_body",
+          "unknown_operation",
+          "cloud_engine_unavailable",
+          "invalid_job_id",
+          "job_not_found",
+          "job_already_finished",
+          "too_many_jobs",
+          "not_found"
+        ]
+      },
+      "ErrorDetail": {
+        "type": "object",
+        "description": "What went wrong, for the editor to act on and for a person to read.",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "message": {
+            "type": "string",
+            "description": "Plain-language explanation, safe to show to a user."
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "status",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "ok"
+          },
+          "version": {
+            "type": "string",
+            "description": "The service version.",
+            "example": "0.1.0"
+          }
+        }
+      },
+      "JobStatus": {
+        "type": "string",
+        "description": "Where a job is in its life. `done` and `cancelled` are final.",
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "cancelled"
+        ]
+      },
+      "JobView": {
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          }
+        }
+      },
+      "Operation": {
+        "type": "string",
+        "description": "Everything the job API recognises. This enum is the single source of truth for the names: the\nhandler parses with it and the OpenAPI spec lists it. Only `noop` runs today; the rest need a\nreal cloud model and are refused honestly until B3.",
+        "enum": [
+          "noop",
+          "segment_subject",
+          "remove_object",
+          "replace_sky",
+          "expand_canvas"
+        ]
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "service",
+      "description": "Is the service up?"
+    },
+    {
+      "name": "jobs",
+      "description": "Start, poll and cancel cloud jobs."
+    }
+  ]
+}

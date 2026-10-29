@@ -66,6 +66,7 @@ Then open <http://localhost:8080>.
 | `npm run build` | Production build (targets Cloudflare via the Nitro `cloudflare-module` preset) |
 | `npm run preview` | Preview the production build |
 | `npm run typecheck` | Type-check without building |
+| `npm run api:types` | Regenerate `src/api/schema.d.ts` from `backend/openapi.json` (after the Rust API changes: `cd backend && cargo run --example openapi > openapi.json` first) |
 | `npm test` | Run the unit tests (Vitest) |
 | `npm run e2e` | Run the end-to-end tests in Chromium (first time: `npx playwright install chromium`) |
 | `npm run test:watch` | Re-run tests as you edit |
@@ -154,7 +155,7 @@ The full plan, with effort and dependencies, is in [ROADMAP.md](./ROADMAP.md). T
 | **M12 · Ship** | Hosting, PWA/offline, privacy-friendly analytics, docs site |
 
 ### Planned Rust backend
-Local editing will always work without a network. For the features that can't run in a browser (M11), the plan is an **optional Rust service** (axum + tokio) that acts as a gateway to AI providers: keys stay server-side, jobs are cancellable, images are processed briefly and deleted, and nothing is stored or logged. A first spike (**B0**) now lives in [`backend/`](./backend): a job API with strict validation, a CORS allowlist, size limits, real cancellation and graceful shutdown, covered by 23 tests. It contains no AI yet. After the spike, Rust was chosen for the gateway (the decision and its trade-offs are in [ROADMAP.md](./ROADMAP.md); the spike is described in [`backend/README.md`](./backend/README.md)). Rust may also be used in the browser, compiled to WebAssembly, if profiling shows the pixel loops are the bottleneck.
+Local editing will always work without a network. For the features that can't run in a browser (M11), the plan is an **optional Rust service** (axum + tokio) that acts as a gateway to AI providers: keys stay server-side, jobs are cancellable, images are processed briefly and deleted, and nothing is stored or logged. A first spike (**B0**) now lives in [`backend/`](./backend): a job API with strict validation, a CORS allowlist, size limits, real cancellation and graceful shutdown, covered by 28 tests. It contains no AI yet. Its API contract is generated from the Rust types into `backend/openapi.json`, and the editor's TypeScript types are generated from that (`npm run api:types`), so the two sides cannot drift apart unnoticed. After the spike, Rust was chosen for the gateway (the decision and its trade-offs are in [ROADMAP.md](./ROADMAP.md); the spike is described in [`backend/README.md`](./backend/README.md)). Rust may also be used in the browser, compiled to WebAssembly, if profiling shows the pixel loops are the bottleneck.
 
 ### Not planned
 Social feeds, profiles, community, a template marketplace, collaboration, cloud galleries, an AI *chat* assistant, generative image creation from scratch, a full RAW pipeline, and native mobile apps.
