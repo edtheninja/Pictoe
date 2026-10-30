@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useEditor } from "@/state/editor/EditorContext";
-import { exportImage } from "@/engine/image/render";
+import { exportImageSafely } from "@/engine/image/render";
+import { describeScaledExport } from "@/engine/image/exportFallback";
 import { canEncode, resolveExportOutcome } from "@/engine/image/exportFormat";
 import type { ExportFormat, ExportQuality } from "@/types/editor";
 
@@ -53,7 +54,7 @@ export function ExportControl() {
     if (!state.source) return;
     setProcessing("exporting");
     try {
-      const blob = await exportImage(
+      const result = await exportImageSafely(
         state.source.element,
         state.source.width,
         state.source.height,
@@ -62,6 +63,7 @@ export function ExportControl() {
         quality,
         state.maskLayers,
       );
+      const { blob } = result;
       // Name the file after what the browser actually produced, not just what was asked for.
       const outcome = resolveExportOutcome(format, blob);
       const base = state.source.name.replace(/\.[^.]+$/, "");
@@ -72,8 +74,12 @@ export function ExportControl() {
       a.click();
       URL.revokeObjectURL(url);
       setProcessing("idle");
-      if (outcome.message) {
-        setNotice(outcome.message); // keep the popover open so the note is seen
+      const notes = [
+        outcome.message,
+        result.scaled ? describeScaledExport(result.full, result) : null,
+      ].filter(Boolean);
+      if (notes.length > 0) {
+        setNotice(notes.join(" ")); // keep the popover open so the note is seen
       } else {
         setNotice(null);
         setOpen(false);

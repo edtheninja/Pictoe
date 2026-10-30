@@ -1,4 +1,5 @@
 import type { SourceImage } from "@/types/editor";
+import { checkImageSize, readImageSize } from "./limits";
 
 export const ACCEPTED_TYPES = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
@@ -9,6 +10,14 @@ export async function loadImageFile(file: File): Promise<SourceImage> {
     throw new ImageLoadError(
       "Pictoe supports JPG, PNG and WebP images right now. Try another file.",
     );
+  }
+
+  // Check the size from the file header first, so a huge (or deliberately misleading) image is
+  // refused before the browser tries to decode it.
+  const header = readImageSize(new Uint8Array(await file.slice(0, 262144).arrayBuffer()));
+  if (header) {
+    const check = checkImageSize(header.width, header.height);
+    if (!check.ok) throw new ImageLoadError(check.message);
   }
 
   const url = URL.createObjectURL(file);
@@ -24,6 +33,9 @@ export async function loadImageFile(file: File): Promise<SourceImage> {
         );
       img.src = url;
     });
+    // Unrecognised headers fall through to here, so the real size is checked once more.
+    const decoded = checkImageSize(element.naturalWidth, element.naturalHeight);
+    if (!decoded.ok) throw new ImageLoadError(decoded.message);
     return {
       element,
       width: element.naturalWidth,

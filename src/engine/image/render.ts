@@ -7,6 +7,7 @@ import {
   supportsCanvasFilter,
   type FilterParams,
 } from "./canvasFilter";
+import { exportWithFallback, type ExportResult } from "./exportFallback";
 import { healedSource } from "./healedSource";
 import { MaskCache } from "./maskCache";
 import {
@@ -434,6 +435,44 @@ export function renderImage(
   return { width: w, height: h };
 }
 
+/**
+ * Renders the edit at full size and encodes it. If the browser can't make a canvas that large
+ * (or runs out of memory), it steps down to the largest size that works and says so in the result.
+ */
+export async function exportImageSafely(
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  edit: EditState,
+  format: string,
+  quality: number,
+  maskLayers?: MaskLayer[],
+): Promise<ExportResult & { full: { width: number; height: number } }> {
+  const full = outputSize(srcW, srcH, edit);
+  const result = await exportWithFallback(full.width, full.height, async (maxDimension) => {
+    const canvas = document.createElement("canvas");
+    try {
+      const { width, height } = renderImage(
+        source,
+        srcW,
+        srcH,
+        edit,
+        canvas,
+        maxDimension,
+        maskLayers,
+      );
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, format, quality),
+      );
+      return { blob, width, height };
+    } finally {
+      canvas.width = 0; // give the pixel memory back before a smaller retry
+      canvas.height = 0;
+    }
+  });
+  return { ...result, full };
+}
+
 export async function exportImage(
   source: CanvasImageSource,
   srcW: number,
@@ -443,9 +482,5 @@ export async function exportImage(
   quality: number,
   maskLayers?: MaskLayer[],
 ): Promise<Blob> {
-  const canvas = document.createElement("canvas");
-  renderImage(source, srcW, srcH, edit, canvas, undefined, maskLayers);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, format, quality));
-  if (!blob) throw new Error("encode-failed");
-  return blob;
+  return (await exportImageSafely(source, srcW, srcH, edit, format, quality, maskLayers)).blob;
 }
