@@ -104,6 +104,7 @@ export function ExportControl() {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
+          aria-label="Export options"
           sideOffset={8}
           align="end"
           className="z-50 w-64 rounded-lg border border-border bg-surface-elevated p-lg shadow-strong"

@@ -44,6 +44,8 @@ type EditorApi = {
   resetAdjustment: (key: AdjustmentKey) => void;
   resetAll: () => void;
   applyEdit: (edit: Partial<EditState>) => void;
+  /** Like applyEdit but records no history; wrap a gesture in begin/endInteraction to record it as one step. */
+  applyEditLive: (edit: Partial<EditState>) => void;
   applyAdjustments: (patch: Partial<Record<AdjustmentKey, number>>) => void;
   undo: () => void;
   redo: () => void;
@@ -193,6 +195,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       resetAdjustment: (key) => dispatch({ type: "resetAdjustment", key }),
       resetAll: () => dispatch({ type: "resetAll" }),
       applyEdit: (edit) => dispatch({ type: "applyEdit", edit }),
+      applyEditLive: (edit) => dispatch({ type: "applyEdit", edit, commit: false }),
       applyAdjustments: (patch) =>
         dispatch({
           type: "applyEdit",

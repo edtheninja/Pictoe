@@ -1,16 +1,17 @@
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { useEditor } from "@/state/editor/EditorContext";
 import type { CropRect } from "@/types/editor";
+import {
+  clamp01,
+  describeCrop,
+  isArrowKey,
+  moveCrop,
+  nudgeCrop,
+  resizeCrop,
+  type CropHandle,
+} from "./cropMath";
 
-type Handle = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-
-const MIN_SIZE = 0.06;
-
-function clamp01(v: number) {
-  return Math.min(1, Math.max(0, v));
-}
-
-const HANDLE_POSITION: Record<Exclude<Handle, "move">, string> = {
+const HANDLE_POSITION: Record<Exclude<CropHandle, "move">, string> = {
   n: "left-1/2 top-0 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize",
   s: "left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2 cursor-ns-resize",
   e: "right-0 top-1/2 translate-x-1/2 -translate-y-1/2 cursor-ew-resize",
@@ -21,12 +22,18 @@ const HANDLE_POSITION: Record<Exclude<Handle, "move">, string> = {
   se: "right-0 bottom-0 translate-x-1/2 translate-y-1/2 cursor-nwse-resize",
 };
 
-/** Interactive crop selection — drag to reposition, drag handles to resize. */
+/**
+ * Interactive crop selection. With a pointer: drag inside to move, drag a handle to resize.
+ * With a keyboard: focus the selection, then arrow keys move it, Alt (Option) + arrows resize it,
+ * and Shift makes the steps bigger. Each gesture (a drag, or a run of key presses) is one undo step.
+ */
 export function CropOverlay() {
-  const { state, applyEdit } = useEditor();
+  const { state, applyEditLive, beginInteraction, endInteraction } = useEditor();
   const containerRef = useRef<HTMLDivElement>(null);
+  const hintId = useId();
+  const keyGestureRef = useRef(false);
   const dragRef = useRef<{
-    handle: Handle;
+    handle: CropHandle;
     startX: number;
     startY: number;
     startCrop: CropRect;
@@ -44,11 +51,12 @@ export function CropOverlay() {
     };
   };
 
-  const beginDrag = (handle: Handle) => (e: React.PointerEvent) => {
+  const beginDrag = (handle: CropHandle) => (e: React.PointerEvent) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     const p = getNormPoint(e.clientX, e.clientY);
     dragRef.current = { handle, startX: p.x, startY: p.y, startCrop: { ...crop } };
+    beginInteraction();
   };
 
   const onMove = (e: React.PointerEvent) => {
@@ -57,39 +65,34 @@ export function CropOverlay() {
     const p = getNormPoint(e.clientX, e.clientY);
     const dx = p.x - d.startX;
     const dy = p.y - d.startY;
-    const s = d.startCrop;
-
-    if (d.handle === "move") {
-      const x = Math.min(Math.max(0, s.x + dx), 1 - s.width);
-      const y = Math.min(Math.max(0, s.y + dy), 1 - s.height);
-      applyEdit({ crop: { x, y, width: s.width, height: s.height } });
-      return;
-    }
-
-    let left = s.x;
-    let top = s.y;
-    let right = s.x + s.width;
-    let bottom = s.y + s.height;
-
-    if (d.handle.includes("w")) left = clamp01(s.x + dx);
-    if (d.handle.includes("e")) right = clamp01(s.x + s.width + dx);
-    if (d.handle.includes("n")) top = clamp01(s.y + dy);
-    if (d.handle.includes("s")) bottom = clamp01(s.y + s.height + dy);
-
-    if (right - left < MIN_SIZE) {
-      if (d.handle.includes("w")) left = right - MIN_SIZE;
-      else right = left + MIN_SIZE;
-    }
-    if (bottom - top < MIN_SIZE) {
-      if (d.handle.includes("n")) top = bottom - MIN_SIZE;
-      else bottom = top + MIN_SIZE;
-    }
-
-    applyEdit({ crop: { x: left, y: top, width: right - left, height: bottom - top } });
+    applyEditLive({
+      crop:
+        d.handle === "move"
+          ? moveCrop(d.startCrop, dx, dy)
+          : resizeCrop(d.startCrop, d.handle, dx, dy),
+    });
   };
 
   const onUp = () => {
+    if (!dragRef.current) return;
     dragRef.current = null;
+    endInteraction(); // the whole drag becomes one undo step
+  };
+
+  const endKeyGesture = () => {
+    if (!keyGestureRef.current) return;
+    keyGestureRef.current = false;
+    endInteraction();
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!isArrowKey(e.key)) return;
+    e.preventDefault(); // don't scroll the page, or (with Alt) go back in history
+    if (!keyGestureRef.current) {
+      keyGestureRef.current = true;
+      beginInteraction();
+    }
+    applyEditLive({ crop: nudgeCrop(crop, e.key, { resize: e.altKey, big: e.shiftKey }) });
   };
 
   const pct = (v: number) => `${v * 100}%`;
@@ -120,12 +123,13 @@ export function CropOverlay() {
         style={{ top: pct(crop.y), width: pct(1 - crop.x - crop.width), height: pct(crop.height) }}
       />
 
-      {/* Crop rectangle — drag inside to move */}
+      {/* Crop rectangle: drag inside to move; focus it to use the arrow keys */}
       <div
-        role="button"
-        tabIndex={-1}
-        aria-label="Crop selection, drag to reposition"
-        className="absolute cursor-move touch-none border-2 border-white/90"
+        role="group"
+        tabIndex={0}
+        aria-label="Crop selection"
+        aria-describedby={hintId}
+        className="absolute cursor-move touch-none border-2 border-white/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         style={{
           left: pct(crop.x),
           top: pct(crop.y),
@@ -133,6 +137,9 @@ export function CropOverlay() {
           height: pct(crop.height),
         }}
         onPointerDown={beginDrag("move")}
+        onKeyDown={onKeyDown}
+        onKeyUp={(e) => isArrowKey(e.key) && endKeyGesture()}
+        onBlur={endKeyGesture}
       >
         <div className="pointer-events-none absolute inset-0 grid grid-cols-3 grid-rows-3">
           {Array.from({ length: 9 }).map((_, i) => (
@@ -140,17 +147,24 @@ export function CropOverlay() {
           ))}
         </div>
 
-        {(Object.keys(HANDLE_POSITION) as Exclude<Handle, "move">[]).map((h) => (
+        {/* Resize handles are for pointers; the keyboard resizes with Alt + arrows on the selection. */}
+        {(Object.keys(HANDLE_POSITION) as Exclude<CropHandle, "move">[]).map((h) => (
           <div
             key={h}
-            role="button"
-            tabIndex={-1}
-            aria-label={`Resize crop from ${h}`}
+            aria-hidden="true"
             onPointerDown={beginDrag(h)}
             className={`absolute h-3.5 w-3.5 touch-none rounded-full border-2 border-white bg-accent ${HANDLE_POSITION[h]}`}
           />
         ))}
       </div>
+
+      <p id={hintId} className="sr-only">
+        Arrow keys move the crop. Hold Alt, or Option on a Mac, to resize it. Hold Shift for larger
+        steps.
+      </p>
+      <p className="sr-only" aria-live="polite">
+        {describeCrop(crop)}
+      </p>
     </div>
   );
 }

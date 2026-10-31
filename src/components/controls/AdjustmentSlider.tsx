@@ -14,23 +14,20 @@ export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
 
   return (
     <div className="group grid grid-cols-[6rem_minmax(0,1fr)_3rem] items-center gap-x-sm py-[3px]">
-      <label
-        htmlFor={`adj-${def.key}`}
+      {/* The slider's thumb carries the accessible name; this is its visible caption. */}
+      <span
         className="min-w-0 truncate text-[13px] text-text-secondary"
         onDoubleClick={() => resetAdjustment(def.key)}
       >
         {def.label}
-      </label>
+      </span>
 
       <Slider.Root
-        id={`adj-${def.key}`}
         className="relative col-span-1 flex h-4 w-full touch-none select-none items-center"
         min={def.min}
         max={def.max}
         step={def.step}
         value={[value]}
-        aria-label={def.label}
-        aria-valuetext={`${value}`}
         onPointerDown={beginInteraction}
         onPointerUp={endInteraction}
         onKeyDown={beginInteraction}

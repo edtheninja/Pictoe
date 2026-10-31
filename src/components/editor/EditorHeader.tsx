@@ -8,6 +8,7 @@ export function EditorHeader() {
 
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-border bg-canvas px-4 sm:px-6">
+      <h1 className="sr-only">Editing {state.source?.name ?? "an image"} in Pictoe</h1>
       <button
         type="button"
         onClick={closeImage}
