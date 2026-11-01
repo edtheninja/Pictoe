@@ -41,3 +41,60 @@ jobs:
 
       - name: Tests
         run: cargo test --locked
+
+  # Builds the real image and checks the things a Dockerfile can get quietly wrong.
+  docker:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint the Dockerfile
+        run: docker run --rm -i hadolint/hadolint < backend/Dockerfile
+
+      - name: Build the image
+        run: docker build -t pictoe-api backend
+
+      - name: Start it
+        run: |
+          docker run -d --name api -p 8787:8787 \
+            --health-interval=2s --health-start-period=1s \
+            -e PICTOE_ALLOWED_ORIGINS=https://app.example.com pictoe-api
+
+      - name: Wait until it reports healthy (its own HEALTHCHECK)
+        run: |
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' api)
+            [ "$status" = healthy ] && exit 0
+            sleep 1
+          done
+          echo "never became healthy (last status: $status)"; docker logs api; exit 1
+
+      - name: It is the real program, not an empty stand-in
+        run: |
+          curl -fsS localhost:8787/openapi.json | grep -q '"/jobs/{id}"'
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8787/jobs \
+            -H 'content-type: application/json' -d '{"operation":"noop"}')
+          [ "$code" = 202 ] || { echo "POST /jobs answered $code"; exit 1; }
+
+      - name: It does not run as root
+        run: |
+          # What the image says, and what the running process actually is (read from /proc,
+          # because the image has no shell to ask).
+          [ "$(docker inspect -f '{{.Config.User}}' pictoe-api)" = "65532:65532" ]
+          pid=$(docker inspect -f '{{.State.Pid}}' api)
+          uid=$(awk '/^Uid:/ { print $2 }' "/proc/$pid/status")
+          [ "$uid" = 65532 ] || { echo "the process runs as uid $uid"; exit 1; }
+
+      - name: It stops promptly and cleanly on SIGTERM
+        run: |
+          start=$(date +%s)
+          docker stop -t 10 api
+          elapsed=$(( $(date +%s) - start ))
+          [ "$elapsed" -lt 5 ] || { echo "took ${elapsed}s: SIGTERM is not handled"; exit 1; }
+          [ "$(docker inspect -f '{{.State.ExitCode}}' api)" = 0 ]
+
+      - name: Show the logs if anything failed
+        if: failure()
+        run: docker logs api || true
+

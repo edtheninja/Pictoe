@@ -34,7 +34,7 @@ Needs Rust 1.85 or newer.
 ```sh
 cd backend
 cargo run                      # listens on 127.0.0.1:8787
-cargo test                     # 28 tests
+cargo test                     # 34 tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
@@ -56,6 +56,30 @@ PICTOE_ALLOWED_ORIGINS=http://localhost:8080,https://pictoe.example cargo run
 | `RUST_LOG` | `info` | Log level |
 
 Bad configuration exits with code 2 and a plain message; a port already in use exits with 1.
+
+## Run it in Docker
+
+```sh
+docker build -t pictoe-api backend
+docker run --rm -p 8787:8787 -e PICTOE_ALLOWED_ORIGINS=https://pictoe.example pictoe-api
+```
+
+The image is a two-stage build. Dependencies are compiled in their own layer, so editing code
+doesn't rebuild them. The final image is a distroless runtime (no shell, no package manager)
+holding one stripped binary, running as the unprivileged user `65532`.
+
+- **Listening address.** Inside the container the service listens on `0.0.0.0:8787`
+  (`PICTOE_ADDR` is set by the image); publish the port with `-p`. Everything in the table above
+  can be overridden with `-e`.
+- **Set `PICTOE_ALLOWED_ORIGINS`.** The default allows only `http://localhost:8080`, so a deployed
+  editor on any other address is refused by the browser until you list its origin.
+- **Health check.** The image has no `curl`, so `HEALTHCHECK` runs the program itself:
+  `pictoe-api --healthcheck` exits 0 when `/health` answers `200` and 1 otherwise. Platforms that
+  probe over HTTP can use `GET /health` directly.
+- **Stopping.** The service finishes in-flight requests on `SIGTERM` and exits 0, so
+  `docker stop` returns at once instead of waiting out its timeout.
+- **Pinning.** The base images are tagged, not pinned by digest. Pin them (`--build-arg
+  RUST_IMAGE=...@sha256:...`) if you need byte-for-byte reproducible builds.
 
 ## API
 
@@ -114,8 +138,7 @@ real workload.**
 
 ## Still to do (see ../ROADMAP.md, Backend track)
 
-- **B1:** Dockerfile and CI (`fmt`, `clippy`, `test`, build). Not included because they couldn't
-  be tested here.
+- **B1:** done: CI (`fmt`, `clippy`, `test`) and the Dockerfile above. Still undecided: where to host it.
 - **B2:** an OpenAPI spec and generated TypeScript types for the editor, and the decision on how
   cloud results stay non-destructive in the edit model.
 - **B3:** the provider adapter, server-side API keys, rate limits per client and a daily spend cap.

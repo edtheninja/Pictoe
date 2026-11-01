@@ -9,6 +9,7 @@
 pub mod config;
 pub mod error;
 pub mod jobs;
+pub mod probe;
 
 use std::time::Duration;
 

@@ -1,6 +1,12 @@
 use std::process::ExitCode;
 
-use pictoe_api::{app, Config};
+use std::time::Duration;
+
+use pictoe_api::{
+    app,
+    probe::{health_probe, probe_target},
+    Config,
+};
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
 
@@ -19,6 +25,16 @@ async fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+
+    // `pictoe-api --healthcheck`: for a container's HEALTHCHECK (the image has no curl or shell).
+    if std::env::args().nth(1).as_deref() == Some("--healthcheck") {
+        let healthy = health_probe(probe_target(config.addr), Duration::from_secs(2)).await;
+        return if healthy {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::from(1)
+        };
+    }
 
     let listener = match TcpListener::bind(config.addr).await {
         Ok(listener) => listener,
