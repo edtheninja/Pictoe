@@ -7,9 +7,11 @@ import {
   supportsCanvasFilter,
   type FilterParams,
 } from "./canvasFilter";
+import { applyColorBands, hasActiveBands } from "./colorBands";
 import { exportWithFallback, type ExportResult } from "./exportFallback";
 import { healedSource } from "./healedSource";
 import { MaskCache } from "./maskCache";
+import { timed } from "./profile";
 import {
   frameOf,
   frameOutputSize,
@@ -123,94 +125,10 @@ function tone(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
   layer("#54ff3c", (Math.max(0, -a.tint) / 100) * 0.25, "soft-light");
 }
 
-const HUE_BAND_CENTERS: Partial<Record<keyof Adjustments, number>> = {
-  satRed: 0,
-  satOrange: 30,
-  satYellow: 60,
-  satGreen: 120,
-  satBlue: 210,
-  satPurple: 280,
-};
-
-const HUE_BAND_HALF_WIDTH = 45;
-
-function hueDistance(a: number, b: number): number {
-  const d = Math.abs(a - b) % 360;
-  return d > 180 ? 360 - d : d;
-}
-
-function rgbToHsl(r: number, g: number, b: number) {
-  const rn = r / 255;
-  const gn = g / 255;
-  const bn = b / 255;
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const l = (max + min) / 2;
-  if (max === min) return { h: 0, s: 0, l };
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h: number;
-  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60;
-  else if (max === gn) h = ((bn - rn) / d + 2) * 60;
-  else h = ((rn - gn) / d + 4) * 60;
-  return { h, s, l };
-}
-
-function hslToRgb(h: number, s: number, l: number) {
-  if (s === 0) {
-    const v = Math.round(l * 255);
-    return { r: v, g: v, b: v };
-  }
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  const hk = h / 360;
-  const hue2rgb = (t: number) => {
-    let tt = t;
-    if (tt < 0) tt += 1;
-    if (tt > 1) tt -= 1;
-    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
-    if (tt < 1 / 2) return q;
-    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
-    return p;
-  };
-  return {
-    r: Math.round(hue2rgb(hk + 1 / 3) * 255),
-    g: Math.round(hue2rgb(hk) * 255),
-    b: Math.round(hue2rgb(hk - 1 / 3) * 255),
-  };
-}
-
 function applyColorBandSaturation(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
-  const bands = Object.entries(HUE_BAND_CENTERS) as [keyof Adjustments, number][];
-  const active = bands.filter(([key]) => Math.abs(a[key]) > 0.5);
-  if (active.length === 0) return;
-
+  if (!hasActiveBands(a)) return;
   const imageData = ctx.getImageData(0, 0, w, h);
-  const d = imageData.data;
-
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i]!;
-    const g = d[i + 1]!;
-    const bch = d[i + 2]!;
-    const { h: hue, s, l } = rgbToHsl(r, g, bch);
-    if (s < 0.02) continue;
-
-    let delta = 0;
-    for (const [key, center] of active) {
-      const dist = hueDistance(hue, center);
-      if (dist >= HUE_BAND_HALF_WIDTH) continue;
-      const weight = Math.cos((dist / HUE_BAND_HALF_WIDTH) * (Math.PI / 2));
-      delta += weight * a[key];
-    }
-    if (delta === 0) continue;
-
-    const newS = clamp(s * (1 + delta / 100), 0, 1);
-    const { r: nr, g: ng, b: nb } = hslToRgb(hue, newS, l);
-    d[i] = nr;
-    d[i + 1] = ng;
-    d[i + 2] = nb;
-  }
-
+  applyColorBands(imageData.data, a);
   ctx.putImageData(imageData, 0, 0);
 }
 
@@ -367,6 +285,20 @@ export function renderImage(
   maxDimension?: number,
   maskLayers?: MaskLayer[],
 ) {
+  return timed("total", () =>
+    renderPipeline(source, srcW, srcH, edit, target, maxDimension, maskLayers),
+  );
+}
+
+function renderPipeline(
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  edit: EditState,
+  target: RenderTarget,
+  maxDimension: number | undefined,
+  maskLayers: MaskLayer[] | undefined,
+) {
   const out = outputSize(srcW, srcH, edit);
   // Clone strokes are applied to a cached copy of the source, before crop, rotation and filters.
   const drawSource = edit.healStrokes?.length
@@ -406,19 +338,21 @@ export function renderImage(
   if (edit.flipH) ctx.scale(-1, 1);
   const dw = swap ? rotH : rotW;
   const dh = swap ? rotW : rotH;
-  ctx.drawImage(drawSource, -dw / 2, -dh / 2, dw, dh);
+  timed("draw (+native filter)", () => ctx.drawImage(drawSource, -dw / 2, -dh / 2, dw, dh));
   ctx.restore();
   // Safari/iOS ignore ctx.filter, so apply the same chain with pixel maths instead.
-  if (!nativeFilter) applyFilterFallback(ctx, w, h, filterParams);
+  if (!nativeFilter) {
+    timed("filter fallback (pixels)", () => applyFilterFallback(ctx, w, h, filterParams));
+  }
 
   ctx.save();
   ctx.filter = "none";
-  tone(ctx, w, h, edit.adjustments);
+  timed("tone layers", () => tone(ctx, w, h, edit.adjustments));
   ctx.restore();
 
-  applyColorBandSaturation(ctx, w, h, edit.adjustments);
+  timed("colour bands", () => applyColorBandSaturation(ctx, w, h, edit.adjustments));
 
-  sharpen(ctx, target, w, h, edit.adjustments.sharpness);
+  timed("sharpen", () => sharpen(ctx, target, w, h, edit.adjustments.sharpness));
 
   if (maskLayers) {
     // Only interactive previews (which pass maxDimension) use the cache.
@@ -427,9 +361,11 @@ export function renderImage(
     // Prune only when masks are actually supplied, so holding "compare with
     // original" (which passes none) doesn't throw the cache away.
     if (cached) previewMaskCache.prune(maskLayers.map((l) => l.id));
-    for (const layer of maskLayers) {
-      applyMaskLayer(ctx, target, w, h, layer, cached, frame);
-    }
+    timed("local masks", () => {
+      for (const layer of maskLayers) {
+        applyMaskLayer(ctx, target, w, h, layer, cached, frame);
+      }
+    });
   }
 
   return { width: w, height: h };
