@@ -5,6 +5,8 @@
  * definitions (brightness → contrast → saturate → blur, each clamped).
  */
 
+import { createCanvas, get2dContext } from "./canvasFactory";
+
 export type FilterParams = {
   brightness: number;
   contrast: number;
@@ -37,10 +39,7 @@ let cachedSupport: boolean | undefined;
 export function supportsCanvasFilter(): boolean {
   if (cachedSupport !== undefined) return cachedSupport;
   try {
-    const probe = document.createElement("canvas");
-    probe.width = 1;
-    probe.height = 1;
-    const ctx = probe.getContext("2d");
+    const ctx = get2dContext(createCanvas(1, 1));
     if (!ctx) {
       cachedSupport = true;
       return true;

@@ -7,6 +7,7 @@ import {
   supportsCanvasFilter,
   type FilterParams,
 } from "./canvasFilter";
+import { createCanvas, get2dContext, type AnyCanvas, type AnyCtx2D } from "./canvasFactory";
 import { applyColorBands, hasActiveBands } from "./colorBands";
 import { exportWithFallback, type ExportResult } from "./exportFallback";
 import { healedSource } from "./healedSource";
@@ -29,7 +30,7 @@ import {
 
 export type RenderTarget = HTMLCanvasElement | OffscreenCanvas;
 
-type Ctx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+type Ctx2D = AnyCtx2D;
 
 /** Size of the output for a given edit state and source dimensions. */
 export function outputSize(srcW: number, srcH: number, edit: EditState) {
@@ -73,10 +74,7 @@ function sharpen(ctx: Ctx2D, target: RenderTarget, w: number, h: number, amount:
 
   const original = ctx.getImageData(0, 0, w, h);
 
-  const blurCanvas = document.createElement("canvas");
-  blurCanvas.width = w;
-  blurCanvas.height = h;
-  const blurCtx = blurCanvas.getContext("2d") as CanvasRenderingContext2D | null;
+  const blurCtx = get2dContext(createCanvas(w, h));
   if (!blurCtx) return;
 
   const radius = 1 + (amount / 100) * 3;
@@ -150,24 +148,21 @@ function buildLocalFilterParams(a: {
   };
 }
 
-function createMaskCanvas(w: number, h: number): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  return canvas;
+function createMaskCanvas(w: number, h: number): AnyCanvas {
+  return createCanvas(w, h);
 }
 
 /** Draws brush strokes (normalized to the output frame) onto a mask canvas.
  *  Strokes are composited in order, so drawing only new strokes onto an
  *  existing canvas gives the same result as redrawing all of them. */
 function drawMaskStrokes(
-  canvas: HTMLCanvasElement,
+  canvas: AnyCanvas,
   w: number,
   h: number,
   strokes: readonly MaskStroke[],
   frame: MaskFrame,
 ) {
-  const mctx = canvas.getContext("2d")!;
+  const mctx = get2dContext(canvas)!;
   const scale = w / frameOutputSize(frame).width;
 
   for (const stroke of strokes) {
@@ -205,7 +200,7 @@ function drawMaskStrokes(
 
 /** Preview masks are cached per layer. Exports skip the cache so a full-resolution
  *  mask isn't kept in memory afterwards. Resolution-independent either way. */
-const previewMaskCache = new MaskCache<HTMLCanvasElement, MaskFrame>(
+const previewMaskCache = new MaskCache<AnyCanvas, MaskFrame>(
   createMaskCanvas,
   drawMaskStrokes,
   maskFrameKey,
@@ -216,7 +211,7 @@ function rasterizeMask(
   h: number,
   strokes: readonly MaskStroke[],
   frame: MaskFrame,
-): HTMLCanvasElement {
+): AnyCanvas {
   const canvas = createMaskCanvas(w, h);
   drawMaskStrokes(canvas, w, h, strokes, frame);
   return canvas;
@@ -240,10 +235,8 @@ function applyMaskLayer(
 ) {
   if (layer.strokes.length === 0) return;
 
-  const temp = document.createElement("canvas");
-  temp.width = w;
-  temp.height = h;
-  const tctx = temp.getContext("2d") as CanvasRenderingContext2D | null;
+  const temp = createCanvas(w, h);
+  const tctx = get2dContext(temp);
   if (!tctx) return;
 
   const localFilter = buildLocalFilterParams(layer.adjustments);

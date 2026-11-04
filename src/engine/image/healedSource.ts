@@ -1,4 +1,5 @@
 import type { HealStroke } from "@/types/editor";
+import { createCanvas, get2dContext, type AnyCanvas } from "./canvasFactory";
 import { cloneDab, dabFromStroke, dabRects } from "./cloneStamp";
 import { planStrokeUpdate } from "./incremental";
 
@@ -66,10 +67,8 @@ export class HealedSources<K extends object, C> {
 }
 
 function makeCanvasSource(source: CanvasImageSource, w: number, h: number) {
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  const canvas = createCanvas(w, h);
+  const ctx = get2dContext(canvas, { willReadFrequently: true })!;
   ctx.drawImage(source, 0, 0, w, h);
 
   const surface: Surface = {
@@ -84,6 +83,4 @@ function makeCanvasSource(source: CanvasImageSource, w: number, h: number) {
 }
 
 /** The healed copy of a source image, for use wherever the original would be drawn. */
-export const healedSource = new HealedSources<CanvasImageSource, HTMLCanvasElement>(
-  makeCanvasSource,
-);
+export const healedSource = new HealedSources<CanvasImageSource, AnyCanvas>(makeCanvasSource);
