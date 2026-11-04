@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderImage, outputSize } from "@/engine/image/render";
+import { getRenderClient, type PreviewFrame } from "@/engine/image/renderClient";
 import { useEditor } from "@/state/editor/EditorContext";
 import { DEFAULT_ADJUSTMENTS, DEFAULT_CROP } from "@/types/editor";
 import { CanvasControls } from "./CanvasControls";
@@ -46,35 +47,74 @@ export function Canvas() {
     return () => ro.disconnect();
   }, []);
 
-  // Preview render — downscaled to what the viewport can actually show.
+  // Free the Worker's copy of the image when the editor is cleared.
+  useEffect(() => {
+    if (!source) getRenderClient()?.clearSource();
+  }, [source]);
+
+  // Preview render — downscaled to what the viewport can actually show. It runs in a Worker where
+  // the browser supports that, so heavy edits don't freeze the page, and on the main thread
+  // otherwise (or if the Worker ever fails).
   useEffect(() => {
     if (!source || !canvasRef.current) return;
     if (frameRef.current) cancelAnimationFrame(frameRef.current);
     frameRef.current = requestAnimationFrame(() => {
-      try {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const maxDim = Math.min(
-          2400,
-          Math.max(640, Math.max(out.width, out.height) * fitScale * viewport.zoom * dpr),
-        );
-        const previewEdit = {
-          ...edit,
-          adjustments: showOriginal ? { ...DEFAULT_ADJUSTMENTS } : edit.adjustments,
-          healStrokes: showOriginal ? [] : edit.healStrokes,
-          crop: isCropping ? { ...DEFAULT_CROP } : edit.crop,
-        };
-        renderImage(
-          source.element,
-          source.width,
-          source.height,
-          previewEdit,
-          canvasRef.current!,
-          maxDim,
-          showOriginal ? undefined : maskLayers,
-        );
-      } catch {
-        setError("Pictoe couldn't process this image. Try another image or check its format.");
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const maxDim = Math.min(
+        2400,
+        Math.max(640, Math.max(out.width, out.height) * fitScale * viewport.zoom * dpr),
+      );
+      const previewEdit = {
+        ...edit,
+        adjustments: showOriginal ? { ...DEFAULT_ADJUSTMENTS } : edit.adjustments,
+        healStrokes: showOriginal ? [] : edit.healStrokes,
+        crop: isCropping ? { ...DEFAULT_CROP } : edit.crop,
+      };
+      const layers = showOriginal ? undefined : maskLayers;
+      const failMessage =
+        "Pictoe couldn't process this image. Try another image or check its format.";
+
+      const renderOnMainThread = () => {
+        if (!canvasRef.current) return;
+        try {
+          renderImage(
+            source.element,
+            source.width,
+            source.height,
+            previewEdit,
+            canvasRef.current,
+            maxDim,
+            layers,
+          );
+        } catch {
+          setError(failMessage);
+        }
+      };
+
+      const drawFrame = (frame: PreviewFrame) => {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          canvas.width = frame.width;
+          canvas.height = frame.height;
+          canvas.getContext("2d")?.drawImage(frame.bitmap, 0, 0);
+        }
+        frame.bitmap.close();
+      };
+
+      const client = getRenderClient();
+      if (!client || !client.usable()) {
+        renderOnMainThread();
+        return;
       }
+      client.useSource(source.element, source.width, source.height);
+      client.render(
+        { edit: previewEdit, maxDimension: maxDim, maskLayers: layers },
+        {
+          done: drawFrame,
+          error: () => setError(failMessage),
+          unavailable: renderOnMainThread,
+        },
+      );
     });
     return () => {
       if (frameRef.current) cancelAnimationFrame(frameRef.current);

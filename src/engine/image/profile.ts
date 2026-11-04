@@ -52,6 +52,11 @@ function record(stage: string, ms: number): void {
   if (list.length > MAX_SAMPLES) list.shift();
 }
 
+/** Records a duration measured elsewhere (for example a Worker round trip) while profiling is on. */
+export function recordTime(stage: string, ms: number): void {
+  if (profilingEnabled()) record(stage, ms);
+}
+
 /** Runs `fn`, recording how long it took under `stage` when profiling is on. */
 export function timed<T>(stage: string, fn: () => T): T {
   if (!profilingEnabled()) return fn();
