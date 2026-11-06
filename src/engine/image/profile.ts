@@ -8,7 +8,7 @@
  * to start over.
  *
  * Caveat: on a GPU-backed canvas, drawing calls return before the GPU has finished, so that
- * cost tends to show up in whichever later stage first reads pixels back (colour bands,
+ * cost tends to show up in whichever later stage first reads pixels back (colour stage,
  * sharpen) rather than in the draw stage itself. Read the stages together with "total".
  */
 

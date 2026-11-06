@@ -13,6 +13,7 @@
     "api:types": "openapi-typescript backend/openapi.json -o src/api/schema.d.ts",
     "format": "prettier --write .",
     "test": "vitest run",
+    "bench": "PICTOE_BENCH=1 vitest run src/engine/image/colorStage.bench.test.ts",
     "e2e": "playwright test",
     "test:watch": "vitest"
   },

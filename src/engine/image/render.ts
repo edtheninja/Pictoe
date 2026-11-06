@@ -8,7 +8,7 @@ import {
   type FilterParams,
 } from "./canvasFilter";
 import { createCanvas, get2dContext, type AnyCanvas, type AnyCtx2D } from "./canvasFactory";
-import { applyColorBands, hasActiveBands } from "./colorBands";
+import { applyColorStage, planColorStage } from "./colorStage";
 import { exportWithFallback, type ExportResult } from "./exportFallback";
 import { healedSource } from "./healedSource";
 import { MaskCache } from "./maskCache";
@@ -123,10 +123,12 @@ function tone(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
   layer("#54ff3c", (Math.max(0, -a.tint) / 100) * 0.25, "soft-light");
 }
 
-function applyColorBandSaturation(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
-  if (!hasActiveBands(a)) return;
+/** All per-pixel colour work in one read and one write; skipped entirely when nothing is active. */
+function applyColorStagePass(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
+  const plan = planColorStage(a);
+  if (!plan) return;
   const imageData = ctx.getImageData(0, 0, w, h);
-  applyColorBands(imageData.data, a);
+  applyColorStage(imageData.data, plan);
   ctx.putImageData(imageData, 0, 0);
 }
 
@@ -343,7 +345,7 @@ function renderPipeline(
   timed("tone layers", () => tone(ctx, w, h, edit.adjustments));
   ctx.restore();
 
-  timed("colour bands", () => applyColorBandSaturation(ctx, w, h, edit.adjustments));
+  timed("colour stage", () => applyColorStagePass(ctx, w, h, edit.adjustments));
 
   timed("sharpen", () => sharpen(ctx, target, w, h, edit.adjustments.sharpness));
 

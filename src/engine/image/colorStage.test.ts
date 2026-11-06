@@ -1,6 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { applyColorBands, activeBands, hasActiveBands } from "./colorBands";
+import {
+  BAND_TABLE_SIZE,
+  HUE_BAND_CENTERS,
+  HUE_BAND_HALF_WIDTH,
+  activeBands,
+  buildBandTable,
+  hasActiveBands,
+} from "./colorBands";
+import { applyColorStage, planColorStage } from "./colorStage";
 import { DEFAULT_ADJUSTMENTS, type Adjustments } from "@/types/editor";
+
+/** Runs the colour stage the way render.ts does: plan, then one pass if anything is active. */
+function applyColorBands(data: Uint8ClampedArray, a: Adjustments) {
+  const plan = planColorStage(a);
+  if (plan) applyColorStage(data, plan);
+}
 
 /**
  * The reference below is the implementation Pictoe shipped before the optimisation, copied
@@ -123,7 +137,7 @@ function compare(a: Uint8ClampedArray, b: Uint8ClampedArray) {
   return { maxDiff, changedAlpha };
 }
 
-describe("applyColorBands matches the original implementation", () => {
+describe("colour stage matches the original colour-band implementation", () => {
   const cases: [string, Partial<Adjustments>][] = [
     ["one band, boosted", { satGreen: 40 }],
     ["one band, fully desaturated", { satBlue: -100 }],
@@ -152,7 +166,7 @@ describe("applyColorBands matches the original implementation", () => {
   }
 });
 
-describe("applyColorBands behaviour", () => {
+describe("colour stage behaviour", () => {
   it("does nothing when no band is active", () => {
     const base = syntheticPhoto(40, 30);
     const data = new Uint8ClampedArray(base);
@@ -204,5 +218,51 @@ describe("applyColorBands behaviour", () => {
     ]);
     expect(hasActiveBands(adj({}))).toBe(false);
     expect(hasActiveBands(adj({ satPurple: -1 }))).toBe(true);
+  });
+});
+
+describe("planColorStage", () => {
+  it("returns null when nothing in the stage is active, so the pixel pass is skipped", () => {
+    expect(planColorStage(adj({}))).toBeNull();
+    expect(planColorStage(adj({ satRed: 0.4, satBlue: -0.5 }))).toBeNull(); // below the activation threshold
+  });
+
+  it("returns a plan with a band table as soon as one band is active", () => {
+    const plan = planColorStage(adj({ satGreen: 30 }));
+    expect(plan).not.toBeNull();
+    expect(plan!.bandTable).toBeInstanceOf(Float32Array);
+  });
+});
+
+describe("buildBandTable", () => {
+  const at = (table: Float32Array, hue: number) =>
+    table[Math.round((hue / 360) * BAND_TABLE_SIZE) % BAND_TABLE_SIZE]!;
+
+  it("is null with no active band", () => {
+    expect(buildBandTable(adj({}))).toBeNull();
+  });
+
+  it("peaks at the band's centre and fades to zero at its edges", () => {
+    const table = buildBandTable(adj({ satGreen: 80 }))!;
+    const centre = HUE_BAND_CENTERS.satGreen;
+    expect(at(table, centre)).toBeCloseTo(80, 1);
+    expect(at(table, centre + HUE_BAND_HALF_WIDTH / 2)).toBeLessThan(80);
+    expect(at(table, centre + HUE_BAND_HALF_WIDTH / 2)).toBeGreaterThan(0);
+    expect(at(table, centre + HUE_BAND_HALF_WIDTH + 1)).toBe(0);
+    expect(at(table, centre - HUE_BAND_HALF_WIDTH - 1)).toBe(0);
+  });
+
+  it("is symmetric around the centre, including across 0° for the red band", () => {
+    const table = buildBandTable(adj({ satRed: 60 }))!;
+    for (const offset of [5, 15, 30, 44]) {
+      expect(at(table, offset)).toBeCloseTo(at(table, 360 - offset), 1);
+    }
+  });
+
+  it("adds neighbouring bands where they overlap", () => {
+    const both = buildBandTable(adj({ satOrange: 40, satYellow: 40 }))!;
+    const orange = buildBandTable(adj({ satOrange: 40 }))!;
+    const yellow = buildBandTable(adj({ satYellow: 40 }))!;
+    expect(at(both, 45)).toBeCloseTo(at(orange, 45) + at(yellow, 45), 3);
   });
 });

@@ -119,7 +119,7 @@ describe("renderImage with no document (Worker-style)", () => {
         .flatMap((c) => c.calls)
         .some((c) => c.name === "set:filter" && c.args[0] !== "none" && c.args[0] !== "invert(1)");
       expect(setFilter).toBe(native);
-      // Sharpen and colour bands both wrote pixels back to the target.
+      // Sharpen and the colour stage both wrote pixels back to the target.
       expect(target.calls.filter((c) => c.name === "putImageData").length).toBeGreaterThanOrEqual(
         2,
       );
