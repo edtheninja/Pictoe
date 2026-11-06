@@ -24,6 +24,7 @@ import {
 import { editorInitialState, editorReducer, type EditorState } from "./editorReducer";
 import { analyzeImage } from "@/engine/image/analyze";
 import { saveSession, loadSession, clearSession } from "@/engine/storage/session";
+import { normalizeSession } from "@/engine/storage/sessionSchema";
 import { frameOf, migrateLegacyLayers } from "@/engine/image/maskSpace";
 
 type EditorApi = {
@@ -105,6 +106,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
     (async () => {
       const saved = await loadSession();
       if (!saved || cancelled) return;
+      // Saves outlive the code that wrote them: fill in what older saves lack and repair what's
+      // invalid, so the rest of the editor can rely on a complete, well-formed edit.
+      const restored = normalizeSession(saved);
+      if (!restored) return;
       const url = URL.createObjectURL(saved.imageBlob);
       try {
         const element = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -126,14 +131,13 @@ export function EditorProvider({ children }: { children: ReactNode }) {
           type: "restoreSession",
           source,
           analysis: analyzeImage(element),
-          // Older saves have no clone strokes; fill in anything they lack.
-          edit: { ...DEFAULT_EDIT_STATE, ...saved.edit },
+          edit: restored.edit,
           maskLayers:
-            saved.maskSpace === "source"
-              ? (saved.maskLayers ?? [])
+            restored.maskSpace === "source"
+              ? restored.maskLayers
               : migrateLegacyLayers(
-                  saved.maskLayers ?? [],
-                  frameOf(source.width, source.height, saved.edit),
+                  restored.maskLayers,
+                  frameOf(source.width, source.height, restored.edit),
                 ),
         });
       } catch {

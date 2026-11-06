@@ -103,6 +103,15 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 
 **Done when:** a user can brighten a face with a radial mask, cool a sky with a gradient, and fine-tune greens with hue/saturation/luminance, all non-destructively and all surviving a reload.
 
+**Sequence of work.** Most of M8 is per-pixel colour maths, so one shared colour stage comes first and the features build on it; mask work follows. Each step ships as its own tested patch.
+
+1. [x] **Session schema version and tolerant restore** (S): `sessionSchema.ts` normalises whatever is saved (fills in adjustments an older save lacks, clamps to slider ranges, repairs or drops invalid strokes, layers and crops); saves are stamped with `schemaVersion`. Needed because M8 adds adjustment keys and mask fields, and the old restore (a shallow merge) would have left new adjustment keys `undefined` for existing sessions.
+2. [ ] **Unified colour stage** (M): one `getImageData`/`putImageData` pass for all per-pixel colour work; colour bands move into it with identical output. Then profile it; if it costs more than about 150 ms at 1.7 MP, make the stage WebGL before building on it.
+3. [ ] **Tonal accuracy** (L), 4. [ ] **Curves** (L), 5. [ ] **Full HSL** (M), 6. [ ] **Colour grading** (M): all in the colour stage (6 reuses the luminance weights from 3). Step 3 changes how saved edits look slightly; decide whether to accept that or keep a legacy mode keyed off the schema version.
+7. [ ] **Mask model v2** (L): linear and radial shapes, invert / visible / order / rename / duplicate. 8. [ ] **Mask UI** (L): gradient and radial overlays, thumbnails, reorderable keyboard-accessible list.
+9. [ ] **More per-area parameters** (M): run the colour stage on the local layer's temp canvas (needs 2, 3, 7).
+10. [ ] **"Done when" end-to-end test** (M) and a profile pass.
+
 ---
 
 ### M9 — Heal *(local first)*

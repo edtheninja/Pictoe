@@ -1,0 +1,341 @@
+import { describe, expect, it } from "vitest";
+import {
+  SESSION_SCHEMA_VERSION,
+  normalizeAdjustments,
+  normalizeCrop,
+  normalizeSession,
+  type NormalizedSession,
+} from "./sessionSchema";
+import {
+  ADJUSTMENT_DEFS,
+  DEFAULT_ADJUSTMENTS,
+  DEFAULT_CROP,
+  DEFAULT_EDIT_STATE,
+} from "@/types/editor";
+
+let counter = 0;
+const makeId = () => `generated-${++counter}`;
+const normalize = (raw: unknown) => normalizeSession(raw, makeId);
+const must = (raw: unknown): NormalizedSession => {
+  const result = normalize(raw);
+  if (!result) throw new Error("expected a session");
+  return result;
+};
+
+/** The oldest format: no schemaVersion, no maskSpace, no clone strokes, and only the first few adjustments. */
+const oldestSave = () => ({
+  imageBlob: "irrelevant",
+  name: "a.jpg",
+  type: "image/jpeg",
+  edit: {
+    adjustments: { exposure: 20, contrast: -10, saturation: 15, sharpness: 30 },
+    crop: { x: 0.1, y: 0.2, width: 0.5, height: 0.6 },
+    rotation: 90,
+    flipH: true,
+  },
+  maskLayers: [
+    {
+      id: "m1",
+      name: "Sky",
+      strokes: [{ x: 0.5, y: 0.4, radius: 0.2 }],
+      adjustments: { exposure: -20, contrast: 0, saturation: 0, temperature: -30 },
+    },
+  ],
+});
+
+/** A save in today's format, written by the current app. */
+const currentSave = () => ({
+  imageBlob: "irrelevant",
+  name: "b.png",
+  type: "image/png",
+  edit: {
+    adjustments: { ...DEFAULT_ADJUSTMENTS, exposure: 12, satGreen: -40, sharpness: 55 },
+    crop: { x: 0.05, y: 0.1, width: 0.8, height: 0.7 },
+    rotation: 270,
+    flipH: false,
+    healStrokes: [{ x: 0.3, y: 0.3, dx: 0.1, dy: -0.05, radius: 0.04, softness: 60 }],
+  },
+  maskLayers: [
+    {
+      id: "layer-a",
+      name: "Face",
+      strokes: [
+        { x: 0.5, y: 0.5, radius: 0.1, softness: 40, mode: "paint" as const },
+        { x: 0.52, y: 0.5, radius: 0.05, mode: "erase" as const },
+      ],
+      adjustments: { exposure: 15, contrast: 5, saturation: -10, temperature: 8 },
+    },
+  ],
+  maskSpace: "source" as const,
+  schemaVersion: SESSION_SCHEMA_VERSION,
+});
+
+describe("opening saves from older builds", () => {
+  it("fills in adjustments an old save never had (the M8 failure mode: undefined -> NaN)", () => {
+    const { edit } = must(oldestSave());
+    expect(Object.keys(edit.adjustments).sort()).toEqual(Object.keys(DEFAULT_ADJUSTMENTS).sort());
+    expect(edit.adjustments.exposure).toBe(20);
+    expect(edit.adjustments.sharpness).toBe(30);
+    expect(edit.adjustments.satGreen).toBe(0);
+    expect(edit.adjustments.highlights).toBe(0);
+    for (const value of Object.values(edit.adjustments)) expect(Number.isFinite(value)).toBe(true);
+  });
+
+  it("gives an old save with no clone strokes an empty list and keeps its crop and rotation", () => {
+    const { edit } = must(oldestSave());
+    expect(edit.healStrokes).toEqual([]);
+    expect(edit.crop).toEqual({ x: 0.1, y: 0.2, width: 0.5, height: 0.6 });
+    expect(edit.rotation).toBe(90);
+    expect(edit.flipH).toBe(true);
+  });
+
+  it("flags the oldest masks as frame-relative so they still get migrated", () => {
+    expect(must(oldestSave()).maskSpace).toBe("frame");
+  });
+
+  it("treats source-space masks as current, by the old flag or by the version", () => {
+    expect(must({ ...oldestSave(), maskSpace: "source" }).maskSpace).toBe("source");
+    expect(must({ ...oldestSave(), schemaVersion: 1 }).maskSpace).toBe("source");
+  });
+
+  it("keeps the layers of an old save intact", () => {
+    const { maskLayers } = must(oldestSave());
+    expect(maskLayers).toEqual(oldestSave().maskLayers);
+  });
+});
+
+describe("opening a save from today's build", () => {
+  it("round-trips unchanged", () => {
+    const saved = currentSave();
+    const result = must(saved);
+    expect(result.edit).toEqual(saved.edit);
+    expect(result.maskLayers).toEqual(saved.maskLayers);
+    expect(result.maskSpace).toBe("source");
+    expect(result.fromNewerVersion).toBe(false);
+  });
+
+  it("is idempotent: normalising its own output changes nothing", () => {
+    const once = must(oldestSave());
+    const again = must({ edit: once.edit, maskLayers: once.maskLayers, schemaVersion: 1 });
+    expect(again.edit).toEqual(once.edit);
+    expect(again.maskLayers).toEqual(once.maskLayers);
+  });
+
+  it("does not add optional stroke fields that weren't saved", () => {
+    const { maskLayers } = must(currentSave());
+    expect(Object.keys(maskLayers[0]!.strokes[1]!).sort()).toEqual(["mode", "radius", "x", "y"]);
+  });
+});
+
+describe("opening a save from a newer build", () => {
+  it("restores what it understands and reports the version gap", () => {
+    const saved = {
+      ...currentSave(),
+      schemaVersion: SESSION_SCHEMA_VERSION + 5,
+      edit: {
+        ...currentSave().edit,
+        adjustments: { ...currentSave().edit.adjustments, hueRed: 30, curves: [1, 2] },
+        somethingNew: { a: 1 },
+      },
+    };
+    const result = must(saved);
+    expect(result.fromNewerVersion).toBe(true);
+    expect(result.edit.adjustments.exposure).toBe(12);
+    expect(result.edit.adjustments).not.toHaveProperty("hueRed");
+    expect(result.edit).not.toHaveProperty("somethingNew");
+  });
+});
+
+describe("damaged or hand-edited saves", () => {
+  it("rejects things that aren't a session at all", () => {
+    for (const junk of [null, undefined, 42, "text", [], true]) expect(normalize(junk)).toBeNull();
+  });
+
+  it("falls back to a default edit when the edit is missing or wrong", () => {
+    for (const edit of [undefined, null, "x", 5, []]) {
+      const result = must({ imageBlob: "b", edit });
+      expect(result.edit).toEqual(DEFAULT_EDIT_STATE);
+    }
+  });
+
+  it("replaces non-numbers and non-finite numbers with defaults, and clamps to slider ranges", () => {
+    const adjustments = normalizeAdjustments({
+      exposure: "50",
+      contrast: Number.NaN,
+      saturation: Number.POSITIVE_INFINITY,
+      brightness: 9999,
+      shadows: -9999,
+      blur: -5,
+      highlights: null,
+    });
+    expect(adjustments.exposure).toBe(0);
+    expect(adjustments.contrast).toBe(0);
+    expect(adjustments.saturation).toBe(0);
+    expect(adjustments.highlights).toBe(0);
+    const range = (key: string) => ADJUSTMENT_DEFS.find((d) => d.key === key)!;
+    expect(adjustments.brightness).toBe(range("brightness").max);
+    expect(adjustments.shadows).toBe(range("shadows").min);
+    expect(adjustments.blur).toBe(range("blur").min);
+  });
+
+  it("repairs an out-of-bounds crop and resets an unusable one", () => {
+    expect(normalizeCrop({ x: 0.8, y: -1, width: 0.5, height: 2 })).toEqual({
+      x: 0.5,
+      y: 0,
+      width: 0.5,
+      height: 1,
+    });
+    expect(normalizeCrop({ x: 0, y: 0, width: 0, height: 0 }).width).toBe(0.01);
+    expect(normalizeCrop({ x: "a", y: 0, width: 1, height: 1 })).toEqual(DEFAULT_CROP);
+    expect(normalizeCrop(undefined)).toEqual(DEFAULT_CROP);
+  });
+
+  it("brings rotation back to a quarter turn between 0 and 270", () => {
+    const rotationOf = (rotation: unknown) => must({ edit: { rotation } }).edit.rotation;
+    expect(rotationOf(-90)).toBe(270);
+    expect(rotationOf(450)).toBe(90);
+    expect(rotationOf(180)).toBe(180);
+    expect(rotationOf("x")).toBe(0);
+    expect(rotationOf(Number.NaN)).toBe(0);
+  });
+
+  it("drops clone strokes it can't repair and defaults a missing softness", () => {
+    const { edit } = must({
+      edit: {
+        healStrokes: [
+          { x: 0.1, y: 0.1, dx: 0.1, dy: 0.1, radius: 0.05 },
+          { x: "a", y: 0.1, dx: 0.1, dy: 0.1, radius: 0.05, softness: 10 },
+          { x: 0.1, y: 0.1, dx: 0.1, dy: 0.1, radius: 0, softness: 10 },
+          null,
+          "stroke",
+        ],
+      },
+    });
+    expect(edit.healStrokes).toHaveLength(1);
+    expect(edit.healStrokes[0]!.softness).toBe(30);
+  });
+
+  it("repairs layers: unique ids, default names, only usable strokes, numeric adjustments", () => {
+    const { maskLayers } = must({
+      maskLayers: [
+        {
+          id: "same",
+          name: "One",
+          strokes: [{ x: 0.1, y: 0.1, radius: 0.1 }, { x: 1 }, 7],
+          adjustments: { exposure: "x", contrast: 500 },
+        },
+        { id: "same", strokes: "nope", adjustments: null },
+        { name: "No id", strokes: [] },
+        null,
+        "layer",
+      ],
+    });
+    expect(maskLayers).toHaveLength(3);
+    expect(new Set(maskLayers.map((l) => l.id)).size).toBe(3);
+    expect(maskLayers[0]!.strokes).toHaveLength(1);
+    expect(maskLayers[0]!.adjustments).toEqual({
+      exposure: 0,
+      contrast: 100,
+      saturation: 0,
+      temperature: 0,
+    });
+    expect(maskLayers[1]!.name).toBe("Area 2");
+    expect(maskLayers[1]!.strokes).toEqual([]);
+    expect(maskLayers[2]!.name).toBe("No id");
+  });
+
+  it("treats a non-array maskLayers as none", () => {
+    expect(must({ maskLayers: "x" }).maskLayers).toEqual([]);
+    expect(must({}).maskLayers).toEqual([]);
+  });
+});
+
+describe("fuzzing a valid save with junk", () => {
+  const JUNK: unknown[] = [
+    Number.NaN,
+    Infinity,
+    -Infinity,
+    "abc",
+    "5",
+    null,
+    undefined,
+    {},
+    [],
+    true,
+    -1e9,
+    1e9,
+    { x: "a" },
+    [1, 2, 3],
+    0,
+    -0.5,
+  ];
+
+  let seed = 20261106;
+  const rnd = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  const pick = <T>(items: readonly T[]): T => items[Math.floor(rnd() * items.length)]!;
+
+  /** Replaces one random value, anywhere in the structure, with junk. */
+  function corrupt(root: Record<string, unknown>) {
+    let node: unknown = root;
+    for (;;) {
+      if (typeof node !== "object" || node === null) return;
+      const keys = Object.keys(node);
+      if (keys.length === 0) return;
+      const key = pick(keys);
+      const child = (node as Record<string, unknown>)[key];
+      if (typeof child !== "object" || child === null || rnd() < 0.35) {
+        (node as Record<string, unknown>)[key] = pick(JUNK);
+        return;
+      }
+      node = child;
+    }
+  }
+
+  function assertUsable(n: NormalizedSession) {
+    for (const [key, value] of Object.entries(n.edit.adjustments)) {
+      const range = ADJUSTMENT_DEFS.find((d) => d.key === key)!;
+      expect(Number.isFinite(value)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(range.min);
+      expect(value).toBeLessThanOrEqual(range.max);
+    }
+    const c = n.edit.crop;
+    expect(c.width).toBeGreaterThanOrEqual(0.01);
+    expect(c.height).toBeGreaterThanOrEqual(0.01);
+    expect(c.x).toBeGreaterThanOrEqual(0);
+    expect(c.y).toBeGreaterThanOrEqual(0);
+    expect(c.x + c.width).toBeLessThanOrEqual(1 + 1e-9);
+    expect(c.y + c.height).toBeLessThanOrEqual(1 + 1e-9);
+    expect([0, 90, 180, 270]).toContain(n.edit.rotation);
+    expect(typeof n.edit.flipH).toBe("boolean");
+    for (const s of n.edit.healStrokes) {
+      for (const v of [s.x, s.y, s.dx, s.dy, s.radius, s.softness])
+        expect(Number.isFinite(v)).toBe(true);
+      expect(s.radius).toBeGreaterThan(0);
+    }
+    expect(new Set(n.maskLayers.map((l) => l.id)).size).toBe(n.maskLayers.length);
+    for (const layer of n.maskLayers) {
+      expect(typeof layer.name).toBe("string");
+      for (const v of Object.values(layer.adjustments)) expect(Number.isFinite(v)).toBe(true);
+      for (const s of layer.strokes) {
+        for (const v of [s.x, s.y, s.radius]) expect(Number.isFinite(v)).toBe(true);
+        expect(s.radius).toBeGreaterThan(0);
+      }
+    }
+  }
+
+  it("never throws, always returns something the editor can use, and is stable when repeated", () => {
+    for (let i = 0; i < 400; i++) {
+      const save = structuredClone(currentSave()) as Record<string, unknown>;
+      for (let k = 0, n = 1 + Math.floor(rnd() * 4); k < n; k++) corrupt(save);
+      const result = normalize(save);
+      if (!result) continue; // the whole save was replaced by junk
+      assertUsable(result);
+      const again = must({ edit: result.edit, maskLayers: result.maskLayers, schemaVersion: 1 });
+      expect(again.edit).toEqual(result.edit);
+      expect(again.maskLayers).toEqual(result.maskLayers);
+    }
+  });
+});

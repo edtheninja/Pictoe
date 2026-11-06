@@ -1,4 +1,5 @@
 import type { EditState, MaskLayer } from "@/types/editor";
+import { SESSION_SCHEMA_VERSION } from "./sessionSchema";
 
 const DB_NAME = "pictoe";
 const DB_VERSION = 1;
@@ -13,6 +14,8 @@ export type SavedSession = {
   maskLayers?: MaskLayer[];
   /** "source": strokes are relative to the source image. Absent in older saves (relative to the visible frame). */
   maskSpace?: "source";
+  /** Which version of the saved shape this is. Stamped by saveSession; absent in older saves. */
+  schemaVersion?: number;
 };
 
 function openDb(): Promise<IDBDatabase> {
@@ -41,7 +44,10 @@ export async function saveSession(session: SavedSession): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       const tx = db!.transaction(STORE_NAME, "readwrite");
 
-      tx.objectStore(STORE_NAME).put(session, SESSION_KEY);
+      tx.objectStore(STORE_NAME).put(
+        { ...session, maskSpace: "source", schemaVersion: SESSION_SCHEMA_VERSION },
+        SESSION_KEY,
+      );
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);
