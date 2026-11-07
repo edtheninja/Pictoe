@@ -107,16 +107,8 @@ function tone(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
     ctx.restore();
   };
 
-  layer("#ffffff", (Math.max(0, a.highlights) / 100) * 0.3, "soft-light");
-  layer("#000000", (Math.max(0, -a.highlights) / 100) * 0.3, "soft-light");
-  layer("#ffffff", (Math.max(0, a.whites) / 100) * 0.28, "overlay");
-  layer("#000000", (Math.max(0, -a.whites) / 100) * 0.22, "overlay");
-
-  layer("#ffffff", (Math.max(0, a.shadows) / 100) * 0.28, "lighten");
-  layer("#000000", (Math.max(0, -a.shadows) / 100) * 0.22, "multiply");
-  layer("#000000", (Math.max(0, -a.blacks) / 100) * 0.3, "multiply");
-  layer("#ffffff", (Math.max(0, a.blacks) / 100) * 0.2, "lighten");
-
+  // Highlights, shadows, whites and blacks are luminosity-weighted and live in the colour stage
+  // (tonal.ts); only the colour casts below are still blend layers.
   layer("#ff9a3c", (Math.max(0, a.temperature) / 100) * 0.35, "soft-light");
   layer("#3ca5ff", (Math.max(0, -a.temperature) / 100) * 0.35, "soft-light");
   layer("#ff3cf0", (Math.max(0, a.tint) / 100) * 0.25, "soft-light");

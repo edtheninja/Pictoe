@@ -25,8 +25,12 @@ const SIZES: [string, number, number][] = [
   ["24 MP export (6000x4000)", 6000, 4000],
 ];
 
+const TONAL = { highlights: -40, shadows: 50, whites: 20, blacks: -25 };
+
 const SETTINGS: [string, Partial<Adjustments>][] = [
+  ["tonal (4 sliders)", TONAL],
   ["one band", { satGreen: 30 }],
+  ["tonal + one band", { ...TONAL, satGreen: 30 }],
   [
     "all six bands",
     { satRed: 20, satOrange: 20, satYellow: 20, satGreen: 20, satBlue: 20, satPurple: 20 },
