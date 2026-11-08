@@ -230,3 +230,40 @@ describe("clone (heal) strokes", () => {
     expect(reducer(reset, { type: "undo" }).edit.healStrokes).toHaveLength(1);
   });
 });
+
+describe("curves in history", () => {
+  const bent = {
+    rgb: [
+      { x: 0, y: 0 },
+      { x: 0.5, y: 0.7 },
+      { x: 1, y: 1 },
+    ],
+    luma: [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ],
+  };
+
+  it("a committed curve edit is undoable", () => {
+    const edited = reducer(fresh(), { type: "applyEdit", edit: { curves: bent } });
+    expect(edited.edit.curves).toEqual(bent);
+    expect(edited.past).toHaveLength(1);
+    expect(reducer(edited, { type: "undo" }).edit.curves).toEqual(DEFAULT_EDIT_STATE.curves);
+  });
+
+  it("live curve updates record nothing until the gesture is committed as one step", () => {
+    const start = fresh();
+    const live = reducer(start, { type: "applyEdit", edit: { curves: bent }, commit: false });
+    expect(live.past).toHaveLength(0);
+    const committed = reducer(live, { type: "commit", snapshot: start.edit });
+    expect(committed.past).toHaveLength(1);
+    expect(committed.edit.curves).toEqual(bent);
+  });
+
+  it("resetAll straightens the curves and can be undone", () => {
+    const edited = reducer(fresh(), { type: "applyEdit", edit: { curves: bent } });
+    const reset = reducer(edited, { type: "resetAll" });
+    expect(reset.edit.curves).toEqual(DEFAULT_EDIT_STATE.curves);
+    expect(reducer(reset, { type: "undo" }).edit.curves).toEqual(bent);
+  });
+});

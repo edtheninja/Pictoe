@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderImage } from "./render";
 import { resetCanvasFilterSupportCache } from "./canvasFilter";
-import { DEFAULT_EDIT_STATE, type Adjustments, type EditState } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  identityCurves,
+  type Adjustments,
+  type CurvesState,
+  type EditState,
+} from "@/types/editor";
 
 /**
  * Highlights, shadows, whites and blacks must no longer be drawn as blend-mode layers: they are
@@ -42,13 +48,14 @@ class FakeCanvas {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function render(patch: Partial<Adjustments>) {
+function render(patch: Partial<Adjustments>, curves?: CurvesState) {
   resetCanvasFilterSupportCache();
   vi.stubGlobal("document", undefined);
   vi.stubGlobal("OffscreenCanvas", FakeCanvas);
   const edit: EditState = {
     ...DEFAULT_EDIT_STATE,
     adjustments: { ...DEFAULT_EDIT_STATE.adjustments, ...patch },
+    curves: curves ?? identityCurves(),
   };
   const target = new FakeCanvas(0, 0);
   renderImage({} as CanvasImageSource, 400, 300, edit, target as never);
@@ -93,5 +100,36 @@ describe("tonal adjustments in the render pipeline", () => {
     const calls = render({ temperature: 30 });
     expect(fills(calls)).toHaveLength(1);
     expect(blendModes(calls)).toContain("soft-light");
+  });
+});
+
+describe("tone curves in the render pipeline", () => {
+  const bent: CurvesState = {
+    rgb: [
+      { x: 0, y: 0 },
+      { x: 0.3, y: 0.2 },
+      { x: 1, y: 1 },
+    ],
+    luma: [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ],
+  };
+
+  it("cost no pixel pass while both curves are straight", () => {
+    const calls = render({});
+    expect(fullReads(calls)).toHaveLength(0);
+  });
+
+  it("run in the colour stage, sharing its single read and write with tonal and colour bands", () => {
+    const calls = render({ shadows: 30, satGreen: 20 }, bent);
+    expect(fullReads(calls)).toHaveLength(1);
+    expect(fullWrites(calls)).toHaveLength(1);
+  });
+
+  it("alone are enough to trigger the pixel pass", () => {
+    const calls = render({}, bent);
+    expect(fullReads(calls)).toHaveLength(1);
+    expect(fullWrites(calls)).toHaveLength(1);
   });
 });

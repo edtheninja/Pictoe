@@ -1,4 +1,4 @@
-import type { EditState, MaskLayer, Adjustments } from "@/types/editor";
+import type { EditState, MaskLayer, Adjustments, CurvesState } from "@/types/editor";
 import type { MaskStroke } from "@/types/editor";
 import {
   applyFilterFallback,
@@ -116,8 +116,14 @@ function tone(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
 }
 
 /** All per-pixel colour work in one read and one write; skipped entirely when nothing is active. */
-function applyColorStagePass(ctx: Ctx2D, w: number, h: number, a: Adjustments) {
-  const plan = planColorStage(a);
+function applyColorStagePass(
+  ctx: Ctx2D,
+  w: number,
+  h: number,
+  a: Adjustments,
+  curves: CurvesState,
+) {
+  const plan = planColorStage(a, curves);
   if (!plan) return;
   const imageData = ctx.getImageData(0, 0, w, h);
   applyColorStage(imageData.data, plan);
@@ -337,7 +343,7 @@ function renderPipeline(
   timed("tone layers", () => tone(ctx, w, h, edit.adjustments));
   ctx.restore();
 
-  timed("colour stage", () => applyColorStagePass(ctx, w, h, edit.adjustments));
+  timed("colour stage", () => applyColorStagePass(ctx, w, h, edit.adjustments, edit.curves));
 
   timed("sharpen", () => sharpen(ctx, target, w, h, edit.adjustments.sharpness));
 

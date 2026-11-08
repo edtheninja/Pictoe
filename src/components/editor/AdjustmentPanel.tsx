@@ -5,12 +5,14 @@ import { IntentBar } from "@/features/intent/IntentBar";
 import { HealPanel } from "@/features/heal/HealPanel";
 import { PresetsPanel } from "@/features/presets/PresetsPanel";
 import { MaskPanel } from "@/features/masks/MaskPanel";
+import { CurvesPanel } from "@/features/curves/CurvesPanel";
 import { BeforeAfter } from "./BeforeAfter";
 
 const TITLES: Record<string, string> = {
   adjust: "Light",
   color: "Color",
   detail: "Detail",
+  curves: "Curves",
   crop: "Crop & rotate",
   heal: "Clone",
   intent: "Intent",
@@ -51,6 +53,7 @@ export function AdjustmentPanel() {
         {tool === "adjust" && <AdjustmentGroup group="light" />}
         {tool === "color" && <AdjustmentGroup group="color" />}
         {tool === "detail" && <AdjustmentGroup group="detail" />}
+        {tool === "curves" && <CurvesPanel />}
         {tool === "crop" && <CropTool />}
         {tool === "intent" && <IntentBar />}
         {tool === "presets" && <PresetsPanel />}

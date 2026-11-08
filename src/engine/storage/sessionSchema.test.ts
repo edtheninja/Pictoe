@@ -54,6 +54,18 @@ const currentSave = () => ({
     rotation: 270,
     flipH: false,
     healStrokes: [{ x: 0.3, y: 0.3, dx: 0.1, dy: -0.05, radius: 0.04, softness: 60 }],
+    curves: {
+      rgb: [
+        { x: 0, y: 0 },
+        { x: 0.25, y: 0.15 },
+        { x: 0.75, y: 0.85 },
+        { x: 1, y: 1 },
+      ],
+      luma: [
+        { x: 0, y: 0.05 },
+        { x: 1, y: 1 },
+      ],
+    },
   },
   maskLayers: [
     {
@@ -124,6 +136,46 @@ describe("opening a save from today's build", () => {
   it("does not add optional stroke fields that weren't saved", () => {
     const { maskLayers } = must(currentSave());
     expect(Object.keys(maskLayers[0]!.strokes[1]!).sort()).toEqual(["mode", "radius", "x", "y"]);
+  });
+});
+
+describe("saves from before tone curves existed", () => {
+  it("get straight curves, with everything else intact", () => {
+    const { curves, ...withoutCurves } = currentSave().edit;
+    expect(curves).toBeDefined();
+    const result = must({ ...currentSave(), edit: withoutCurves });
+    expect(result.edit.curves).toEqual({
+      rgb: [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+      luma: [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ],
+    });
+    expect(result.edit.adjustments.exposure).toBe(12);
+    expect(result.edit.healStrokes).toHaveLength(1);
+  });
+
+  it("the oldest saves get straight curves too", () => {
+    expect(must(oldestSave()).edit.curves).toEqual(DEFAULT_EDIT_STATE.curves);
+  });
+
+  it("repairs damaged curves instead of failing", () => {
+    const result = must({
+      edit: {
+        curves: {
+          rgb: [{ x: 0.9, y: 0.2 }, { x: "a", y: 1 }, { x: 0.1, y: 0.8 }, null],
+          luma: "nonsense",
+        },
+      },
+    });
+    expect(result.edit.curves.rgb).toEqual([
+      { x: 0, y: 0.8 },
+      { x: 1, y: 0.2 },
+    ]);
+    expect(result.edit.curves.luma).toEqual(DEFAULT_EDIT_STATE.curves.luma);
   });
 });
 
@@ -310,6 +362,17 @@ describe("fuzzing a valid save with junk", () => {
     expect(c.y + c.height).toBeLessThanOrEqual(1 + 1e-9);
     expect([0, 90, 180, 270]).toContain(n.edit.rotation);
     expect(typeof n.edit.flipH).toBe("boolean");
+    for (const curve of [n.edit.curves.rgb, n.edit.curves.luma]) {
+      expect(curve.length).toBeGreaterThanOrEqual(2);
+      expect(curve[0]!.x).toBe(0);
+      expect(curve[curve.length - 1]!.x).toBe(1);
+      for (let i = 0; i < curve.length; i++) {
+        expect(Number.isFinite(curve[i]!.y)).toBe(true);
+        expect(curve[i]!.y).toBeGreaterThanOrEqual(0);
+        expect(curve[i]!.y).toBeLessThanOrEqual(1);
+        if (i > 0) expect(curve[i]!.x).toBeGreaterThan(curve[i - 1]!.x);
+      }
+    }
     for (const s of n.edit.healStrokes) {
       for (const v of [s.x, s.y, s.dx, s.dy, s.radius, s.softness])
         expect(Number.isFinite(v)).toBe(true);

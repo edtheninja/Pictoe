@@ -1,4 +1,14 @@
-import { Brush, Contrast, Crop, Droplet, Focus, Palette, Sparkles, Stamp } from "lucide-react";
+import {
+  Brush,
+  Contrast,
+  Crop,
+  Droplet,
+  Focus,
+  Palette,
+  Sparkles,
+  Spline,
+  Stamp,
+} from "lucide-react";
 import type { ToolId } from "@/types/editor";
 import { useEditor } from "@/state/editor/EditorContext";
 
@@ -6,6 +16,7 @@ const TOOLS: { id: ToolId; label: string; icon: React.ComponentType<{ className?
   { id: "adjust", label: "Adjust", icon: Contrast },
   { id: "color", label: "Color", icon: Droplet },
   { id: "detail", label: "Detail", icon: Focus },
+  { id: "curves", label: "Curves", icon: Spline },
   { id: "crop", label: "Crop", icon: Crop },
   { id: "mask", label: "Local", icon: Brush },
   { id: "heal", label: "Clone", icon: Stamp },

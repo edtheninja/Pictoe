@@ -42,18 +42,29 @@ export type HealStroke = {
   softness: number; // 0 hard edge … 100 fully feathered
 };
 
+/** One control point on a tone curve: input level (x) to output level (y), both 0..1. */
+export type CurvePoint = { x: number; y: number };
+
+/**
+ * Tone curves. `rgb` maps each colour channel (the master curve); `luma` maps luminance only and
+ * leaves colour alone. Each is a list of points sorted by x, first point at x = 0 and last at x = 1.
+ */
+export type CurvesState = { rgb: CurvePoint[]; luma: CurvePoint[] };
+export type CurveChannel = keyof CurvesState;
+
 export type EditState = {
   adjustments: Adjustments;
   crop: CropRect; // normalized 0..1 relative to the (rotated) source
   rotation: number; // degrees, multiples of 90
   flipH: boolean;
   healStrokes: HealStroke[];
+  curves: CurvesState;
 };
 
 export type Viewport = { zoom: number; panX: number; panY: number };
 
 export type ToolId =
-  "adjust" | "color" | "detail" | "crop" | "heal" | "intent" | "presets" | "mask";
+  "adjust" | "color" | "detail" | "curves" | "crop" | "heal" | "intent" | "presets" | "mask";
 
 export type SourceImage = {
   element: HTMLImageElement;
@@ -103,12 +114,20 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
 
 export const DEFAULT_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1 };
 
+/** A curve that changes nothing: a straight line from black to white. */
+export const identityCurve = (): CurvePoint[] => [
+  { x: 0, y: 0 },
+  { x: 1, y: 1 },
+];
+export const identityCurves = (): CurvesState => ({ rgb: identityCurve(), luma: identityCurve() });
+
 export const DEFAULT_EDIT_STATE: EditState = {
   adjustments: { ...DEFAULT_ADJUSTMENTS },
   crop: { ...DEFAULT_CROP },
   rotation: 0,
   flipH: false,
   healStrokes: [],
+  curves: identityCurves(),
 };
 
 export type AdjustmentDef = {

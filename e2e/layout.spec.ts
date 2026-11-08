@@ -1,7 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { IMAGE, openTestPhoto } from "./helpers";
 
-const TOOLS = ["Adjust", "Color", "Detail", "Crop", "Local", "Clone", "Presets", "Intent"];
+const TOOLS = [
+  "Adjust",
+  "Color",
+  "Detail",
+  "Curves",
+  "Crop",
+  "Local",
+  "Clone",
+  "Presets",
+  "Intent",
+];
 
 const viewports = [
   { name: "phone", width: 390, height: 844, mobile: true },

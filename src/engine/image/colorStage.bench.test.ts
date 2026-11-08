@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { applyColorStage, planColorStage } from "./colorStage";
-import { DEFAULT_ADJUSTMENTS, type Adjustments } from "@/types/editor";
+import {
+  DEFAULT_ADJUSTMENTS,
+  identityCurves,
+  type Adjustments,
+  type CurvesState,
+} from "@/types/editor";
 
 /**
  * How long the colour stage takes per frame, on this machine. Skipped in normal test runs; run it
@@ -27,14 +32,37 @@ const SIZES: [string, number, number][] = [
 
 const TONAL = { highlights: -40, shadows: 50, whites: 20, blacks: -25 };
 
-const SETTINGS: [string, Partial<Adjustments>][] = [
-  ["tonal (4 sliders)", TONAL],
-  ["one band", { satGreen: 30 }],
-  ["tonal + one band", { ...TONAL, satGreen: 30 }],
-  [
-    "all six bands",
-    { satRed: 20, satOrange: 20, satYellow: 20, satGreen: 20, satBlue: 20, satPurple: 20 },
-  ],
+const S_CURVE = [
+  { x: 0, y: 0 },
+  { x: 0.25, y: 0.15 },
+  { x: 0.75, y: 0.85 },
+  { x: 1, y: 1 },
+];
+const SETTINGS: {
+  label: string;
+  adjustments: Partial<Adjustments>;
+  curves?: Partial<CurvesState>;
+}[] = [
+  { label: "tonal (4 sliders)", adjustments: TONAL },
+  { label: "RGB curve", adjustments: {}, curves: { rgb: S_CURVE } },
+  { label: "RGB + luma curves", adjustments: {}, curves: { rgb: S_CURVE, luma: S_CURVE } },
+  { label: "one band", adjustments: { satGreen: 30 } },
+  {
+    label: "tonal + curves + one band",
+    adjustments: { ...TONAL, satGreen: 30 },
+    curves: { rgb: S_CURVE, luma: S_CURVE },
+  },
+  {
+    label: "all six bands",
+    adjustments: {
+      satRed: 20,
+      satOrange: 20,
+      satYellow: 20,
+      satGreen: 20,
+      satBlue: 20,
+      satPurple: 20,
+    },
+  },
 ];
 
 /** Photo-like pixels: smooth colour fields plus noise, so most pixels are saturated and in some band. */
@@ -76,8 +104,11 @@ describe.skipIf(!enabled)("colour stage timing (npm run bench)", () => {
       const base = photo(w, h);
       const work = new Uint8ClampedArray(base.length);
       const row: Record<string, string> = { size: sizeLabel };
-      for (const [label, patch] of SETTINGS) {
-        const plan = planColorStage({ ...DEFAULT_ADJUSTMENTS, ...patch })!;
+      for (const { label, adjustments, curves } of SETTINGS) {
+        const plan = planColorStage(
+          { ...DEFAULT_ADJUSTMENTS, ...adjustments },
+          { ...identityCurves(), ...curves },
+        )!;
         const { median, best } = medianMs(() => {
           work.set(base); // each run starts from fresh pixels
           applyColorStage(work, plan);

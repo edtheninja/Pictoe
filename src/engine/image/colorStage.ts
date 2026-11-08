@@ -1,5 +1,6 @@
-import type { Adjustments } from "@/types/editor";
+import type { Adjustments, CurvesState } from "@/types/editor";
 import { BAND_TABLE_SIZE, buildBandTable } from "./colorBands";
+import { buildCurvesPlan, type CurvesPlan } from "./curves";
 import { buildTonalTable } from "./tonal";
 
 /**
@@ -10,10 +11,11 @@ import { buildTonalTable } from "./tonal";
  * that cost, so they share one pass instead: the pixel is read once, each active operation adjusts
  * it in turn, and it is written once.
  *
- * Today the stage holds the highlights / shadows / whites / blacks adjustments (tonal.ts) and the
- * per-colour-band saturation (colorBands.ts). Curves, full HSL and colour grading are meant to be
- * added here as further sections of the same loop. The order inside the loop is the order the
- * operations are applied: tonal first, then colour bands on the result.
+ * Today the stage holds the highlights / shadows / whites / blacks adjustments (tonal.ts), the tone
+ * curves (curves.ts) and the per-colour-band saturation (colorBands.ts). Full HSL and colour grading
+ * are meant to be added here as further sections of the same loop. The order inside the loop is the
+ * order the operations are applied: tonal, then the RGB curve, then the luminance curve, then colour
+ * bands, each on the result of the one before.
  *
  * Pure maths on RGBA bytes: no canvas, no DOM, so it runs on the main thread or in a Worker.
  */
@@ -22,21 +24,26 @@ import { buildTonalTable } from "./tonal";
 export type ColorStagePlan = {
   /** Luminance change per luminance byte, in byte units; null when no tonal slider is active. */
   tonalTable: Float32Array | null;
+  /** Tone curve lookup tables; null when both curves are the straight line. */
+  curves: CurvesPlan | null;
   /** Saturation change per hue, in percent; null when no colour band is active. */
   bandTable: Float32Array | null;
 };
 
 /** Returns null when nothing in the stage is active, so the caller can skip the pixel pass entirely. */
-export function planColorStage(a: Adjustments): ColorStagePlan | null {
+export function planColorStage(a: Adjustments, curves?: CurvesState): ColorStagePlan | null {
   const tonalTable = buildTonalTable(a);
+  const curvesPlan = curves ? buildCurvesPlan(curves) : null;
   const bandTable = buildBandTable(a);
-  if (!tonalTable && !bandTable) return null;
-  return { tonalTable, bandTable };
+  if (!tonalTable && !curvesPlan && !bandTable) return null;
+  return { tonalTable, curves: curvesPlan, bandTable };
 }
 
 /** Applies the plan to RGBA pixel data in place. Alpha is untouched. */
 export function applyColorStage(data: Uint8ClampedArray, plan: ColorStagePlan): void {
   const { tonalTable, bandTable } = plan;
+  const rgbLut = plan.curves?.rgbLut ?? null;
+  const lumaTable = plan.curves?.lumaTable ?? null;
 
   for (let i = 0; i < data.length; i += 4) {
     // Highlights / shadows / whites / blacks: shift luminance by an amount that depends on the
@@ -45,6 +52,26 @@ export function applyColorStage(data: Uint8ClampedArray, plan: ColorStagePlan): 
     if (tonalTable) {
       const luma = Math.round(0.2126 * data[i]! + 0.7152 * data[i + 1]! + 0.0722 * data[i + 2]!);
       const shift = tonalTable[luma]!;
+      if (shift !== 0) {
+        data[i] = data[i]! + shift;
+        data[i + 1] = data[i + 1]! + shift;
+        data[i + 2] = data[i + 2]! + shift;
+      }
+    }
+
+    // RGB curve: every channel goes through the same curve on its own, so a curve that isn't a
+    // straight line can also change colour (an S-curve adds contrast and saturation).
+    if (rgbLut) {
+      data[i] = rgbLut[data[i]!]!;
+      data[i + 1] = rgbLut[data[i + 1]!]!;
+      data[i + 2] = rgbLut[data[i + 2]!]!;
+    }
+
+    // Luminance curve: moves luminance only, by the same shift on all three channels, so the
+    // difference between the channels (the colour) is kept.
+    if (lumaTable) {
+      const luma = Math.round(0.2126 * data[i]! + 0.7152 * data[i + 1]! + 0.0722 * data[i + 2]!);
+      const shift = lumaTable[luma]!;
       if (shift !== 0) {
         data[i] = data[i]! + shift;
         data[i + 1] = data[i + 1]! + shift;

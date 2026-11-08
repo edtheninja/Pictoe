@@ -17,17 +17,22 @@ function summarizeChange(prev: EditState, next: EditState): string {
     return "Clone";
   }
 
+  const curvesChanged = JSON.stringify(prev.curves) !== JSON.stringify(next.curves);
+
   const changed = (Object.keys(next.adjustments) as AdjustmentKey[])
     .filter((k) => next.adjustments[k] !== prev.adjustments[k])
     .map((k) => ({ key: k, delta: next.adjustments[k] - prev.adjustments[k] }));
 
-  if (changed.length === 0) return "No change";
+  if (changed.length === 0) return curvesChanged ? "Curves" : "No change";
 
   const sorted = [...changed].sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   const top = sorted[0]!;
   const label = ADJUSTMENT_DEFS.find((d) => d.key === top.key)?.label ?? top.key;
   const sign = top.delta > 0 ? "+" : "";
-  const extra = changed.length > 1 ? ` +${changed.length - 1} more` : "";
+  const extra =
+    changed.length + (curvesChanged ? 1 : 0) > 1
+      ? ` +${changed.length - 1 + (curvesChanged ? 1 : 0)} more`
+      : "";
   return `${label} ${sign}${Math.round(top.delta)}${extra}`;
 }
 

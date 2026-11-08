@@ -2,7 +2,17 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 import { openTestPhoto } from "./helpers";
 
-const TOOLS = ["Adjust", "Color", "Detail", "Crop", "Local", "Clone", "Presets", "Intent"];
+const TOOLS = [
+  "Adjust",
+  "Color",
+  "Detail",
+  "Curves",
+  "Crop",
+  "Local",
+  "Clone",
+  "Presets",
+  "Intent",
+];
 const TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa", "best-practice"];
 const PANEL = 'section[aria-label$="controls"]';
 

@@ -7,6 +7,7 @@ import {
   DEFAULT_CROP,
   DEFAULT_EDIT_STATE,
   DEFAULT_LOCAL_ADJUSTMENTS,
+  identityCurves,
   type AdjustmentKey,
   type EditState,
   type HealStroke,
@@ -193,6 +194,7 @@ function reducer(state: State, action: Action): State {
           rotation: 0,
           flipH: false,
           healStrokes: [],
+          curves: identityCurves(),
         },
         ...pushHistory(state, state.edit),
       };

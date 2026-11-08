@@ -12,6 +12,7 @@ import {
   type MaskLayer,
   type MaskStroke,
 } from "@/types/editor";
+import { normalizeCurves } from "@/engine/image/curves";
 
 /**
  * Turns whatever came out of IndexedDB into a session the editor can safely use.
@@ -164,6 +165,7 @@ export function normalizeEdit(raw: unknown): EditState {
     rotation: normalizeRotation(source["rotation"]),
     flipH: source["flipH"] === true,
     healStrokes: normalizeHealStrokes(source["healStrokes"]),
+    curves: normalizeCurves(source["curves"]),
   };
 }
 

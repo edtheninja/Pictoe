@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { renderImage, outputSize } from "@/engine/image/render";
 import { getRenderClient, type PreviewFrame } from "@/engine/image/renderClient";
 import { useEditor } from "@/state/editor/EditorContext";
-import { DEFAULT_ADJUSTMENTS, DEFAULT_CROP } from "@/types/editor";
+import { DEFAULT_ADJUSTMENTS, DEFAULT_CROP, identityCurves } from "@/types/editor";
 import { CanvasControls } from "./CanvasControls";
 import { CropOverlay } from "./CropOverlay";
 import { HealOverlay } from "./HealOverlay";
@@ -68,6 +68,7 @@ export function Canvas() {
         ...edit,
         adjustments: showOriginal ? { ...DEFAULT_ADJUSTMENTS } : edit.adjustments,
         healStrokes: showOriginal ? [] : edit.healStrokes,
+        curves: showOriginal ? identityCurves() : edit.curves,
         crop: isCropping ? { ...DEFAULT_CROP } : edit.crop,
       };
       const layers = showOriginal ? undefined : maskLayers;
