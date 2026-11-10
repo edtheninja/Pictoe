@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ADJUSTMENT_DEFS } from "@/types/editor";
 import { AdjustmentSlider } from "@/components/controls/AdjustmentSlider";
 import { ColorMixer } from "./ColorMixer";
+import { ColorGrading } from "./ColorGrading";
 
 /**
  * Progressive disclosure: basic controls first, advanced revealed on demand.
@@ -11,9 +12,9 @@ export function AdjustmentGroup({ group }: { group: "light" | "color" | "detail"
   const defs = ADJUSTMENT_DEFS.filter((d) => d.group === group);
   const basic = defs.filter((d) => d.level === "basic");
   const advanced = defs.filter((d) => d.level === "advanced");
-  // The Color group also holds the colour mixer, which is one more advanced control.
+  // The Color group also holds the colour mixer and colour grading, two more advanced controls.
   const hasMixer = group === "color";
-  const advancedCount = advanced.length + (hasMixer ? 1 : 0);
+  const advancedCount = advanced.length + (hasMixer ? 2 : 0);
 
   return (
     <div className="min-w-0">
@@ -21,7 +22,12 @@ export function AdjustmentGroup({ group }: { group: "light" | "color" | "detail"
         <AdjustmentSlider key={def.key} def={def} />
       ))}
       {showAdvanced && advanced.map((def) => <AdjustmentSlider key={def.key} def={def} />)}
-      {showAdvanced && hasMixer && <ColorMixer />}
+      {showAdvanced && hasMixer && (
+        <>
+          <ColorMixer />
+          <ColorGrading />
+        </>
+      )}
       {advancedCount > 0 && (
         <button
           type="button"

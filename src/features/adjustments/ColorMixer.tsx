@@ -40,6 +40,9 @@ export function ColorMixer() {
 
   return (
     <div role="group" aria-label="Colour mixer" className="mt-sm min-w-0">
+      <h3 className="mb-xs text-[11px] font-medium uppercase tracking-[0.14em] text-text-muted">
+        Colour mixer
+      </h3>
       <div
         role="group"
         aria-label="Colour band"

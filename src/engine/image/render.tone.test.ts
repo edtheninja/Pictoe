@@ -133,3 +133,35 @@ describe("tone curves in the render pipeline", () => {
     expect(fullWrites(calls)).toHaveLength(1);
   });
 });
+
+describe("colour grading in the render pipeline", () => {
+  it("alone is enough to trigger the single pixel pass", () => {
+    const calls = render({ gradeShadowsSat: 50, gradeShadowsHue: 220 });
+    expect(fullReads(calls)).toHaveLength(1);
+    expect(fullWrites(calls)).toHaveLength(1);
+  });
+
+  it("shares that one read and write with tonal, the colour mixer and the curves", () => {
+    const calls = render(
+      { shadows: 20, satGreen: 30, hueRed: 10, gradeHighlightsSat: 40, gradeHighlightsHue: 40 },
+      {
+        rgb: [
+          { x: 0, y: 0 },
+          { x: 0.3, y: 0.2 },
+          { x: 1, y: 1 },
+        ],
+        luma: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+      },
+    );
+    expect(fullReads(calls)).toHaveLength(1);
+    expect(fullWrites(calls)).toHaveLength(1);
+  });
+
+  it("a hue or balance with no saturation or luminance does no pixel work", () => {
+    const calls = render({ gradeShadowsHue: 200, gradeBalance: 50 });
+    expect(fullReads(calls)).toHaveLength(0);
+  });
+});

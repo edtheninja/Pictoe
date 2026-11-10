@@ -230,6 +230,25 @@ describe("damaged or hand-edited saves", () => {
     expect(adjustments.blur).toBe(range("blur").min);
   });
 
+  it("keeps colour grading values inside their own ranges (hue 0-360, saturation 0-100)", () => {
+    const adjustments = normalizeAdjustments({
+      gradeShadowsHue: 500,
+      gradeMidtonesHue: -20,
+      gradeHighlightsSat: 250,
+      gradeShadowsSat: -5,
+      gradeMidtonesLum: 140,
+      gradeBalance: -300,
+      gradeHighlightsHue: 215,
+    });
+    expect(adjustments.gradeShadowsHue).toBe(360);
+    expect(adjustments.gradeMidtonesHue).toBe(0);
+    expect(adjustments.gradeHighlightsSat).toBe(100);
+    expect(adjustments.gradeShadowsSat).toBe(0);
+    expect(adjustments.gradeMidtonesLum).toBe(100);
+    expect(adjustments.gradeBalance).toBe(-100);
+    expect(adjustments.gradeHighlightsHue).toBe(215);
+  });
+
   it("repairs an out-of-bounds crop and resets an unusable one", () => {
     expect(normalizeCrop({ x: 0.8, y: -1, width: 0.5, height: 2 })).toEqual({
       x: 0.5,

@@ -34,6 +34,18 @@ export type Adjustments = {
   lumGreen: number;
   lumBlue: number;
   lumPurple: number;
+  // Colour grading: a tint (hue 0-360, saturation 0-100) and a luminance shift for each tonal range,
+  // and a balance between the shadows and the highlights.
+  gradeShadowsHue: number;
+  gradeShadowsSat: number;
+  gradeShadowsLum: number;
+  gradeMidtonesHue: number;
+  gradeMidtonesSat: number;
+  gradeMidtonesLum: number;
+  gradeHighlightsHue: number;
+  gradeHighlightsSat: number;
+  gradeHighlightsLum: number;
+  gradeBalance: number;
 };
 
 export type AdjustmentKey = keyof Adjustments;
@@ -135,6 +147,16 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
   lumGreen: 0,
   lumBlue: 0,
   lumPurple: 0,
+  gradeShadowsHue: 0,
+  gradeShadowsSat: 0,
+  gradeShadowsLum: 0,
+  gradeMidtonesHue: 0,
+  gradeMidtonesSat: 0,
+  gradeMidtonesLum: 0,
+  gradeHighlightsHue: 0,
+  gradeHighlightsSat: 0,
+  gradeHighlightsLum: 0,
+  gradeBalance: 0,
 };
 
 export const DEFAULT_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1 };
@@ -161,7 +183,7 @@ export type AdjustmentDef = {
   min: number;
   max: number;
   step: number;
-  group: "light" | "color" | "detail" | "bands";
+  group: "light" | "color" | "detail" | "bands" | "grading";
   /** Progressive disclosure level */
   level: "basic" | "advanced";
 };
@@ -181,6 +203,45 @@ const BAND_CHANNEL_WORD: Record<BandChannel, string> = {
   sat: "saturation",
   lum: "luminance",
 };
+
+/** The three tonal ranges of colour grading, from dark to bright. */
+export const GRADE_RANGES = ["Shadows", "Midtones", "Highlights"] as const;
+export type GradeRange = (typeof GRADE_RANGES)[number];
+export const GRADE_CHANNELS = ["hue", "sat", "lum"] as const;
+export type GradeChannel = (typeof GRADE_CHANNELS)[number];
+
+/** The adjustment key for one colour-grading slider, e.g. ("Shadows", "hue") is "gradeShadowsHue". */
+export const gradeKey = (range: GradeRange, channel: GradeChannel) =>
+  `grade${range}${channel === "hue" ? "Hue" : channel === "sat" ? "Sat" : "Lum"}` as AdjustmentKey;
+
+const GRADE_CHANNEL_DEF: Record<GradeChannel, { word: string; min: number; max: number }> = {
+  hue: { word: "hue", min: 0, max: 360 },
+  sat: { word: "saturation", min: 0, max: 100 },
+  lum: { word: "luminance", min: -100, max: 100 },
+};
+
+const GRADE_DEFS: AdjustmentDef[] = [
+  ...GRADE_RANGES.flatMap((range) =>
+    GRADE_CHANNELS.map((channel) => ({
+      key: gradeKey(range, channel),
+      label: `${range} ${GRADE_CHANNEL_DEF[channel].word}`,
+      min: GRADE_CHANNEL_DEF[channel].min,
+      max: GRADE_CHANNEL_DEF[channel].max,
+      step: 1,
+      group: "grading" as const,
+      level: "advanced" as const,
+    })),
+  ),
+  {
+    key: "gradeBalance",
+    label: "Grading balance",
+    min: -100,
+    max: 100,
+    step: 1,
+    group: "grading",
+    level: "advanced",
+  },
+];
 
 const BAND_DEFS: AdjustmentDef[] = BAND_NAMES.flatMap((band) =>
   BAND_CHANNELS.map((channel) => ({
@@ -308,6 +369,7 @@ export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
   },
   { key: "blur", label: "Blur", min: 0, max: 100, step: 1, group: "detail", level: "advanced" },
   ...BAND_DEFS,
+  ...GRADE_DEFS,
 ];
 
 export type MaskStrokeMode = "paint" | "erase";

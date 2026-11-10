@@ -49,6 +49,17 @@ const SETTINGS: {
   { label: "one band", adjustments: { satGreen: 30 } },
   { label: "one band H+S+L", adjustments: { hueGreen: 30, satGreen: 30, lumGreen: -20 } },
   {
+    label: "grading (3 ranges)",
+    adjustments: {
+      gradeShadowsHue: 220,
+      gradeShadowsSat: 50,
+      gradeMidtonesHue: 40,
+      gradeMidtonesSat: 20,
+      gradeHighlightsHue: 50,
+      gradeHighlightsSat: 40,
+    },
+  },
+  {
     label: "tonal + curves + one band",
     adjustments: { ...TONAL, satGreen: 30 },
     curves: { rgb: S_CURVE, luma: S_CURVE },

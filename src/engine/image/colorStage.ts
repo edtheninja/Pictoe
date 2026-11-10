@@ -1,6 +1,7 @@
 import type { Adjustments, CurvesState } from "@/types/editor";
 import { BAND_TABLE_SIZE, LUM_STRENGTH, buildBandTables, type BandTables } from "./colorBands";
 import { buildCurvesPlan, type CurvesPlan } from "./curves";
+import { buildGradingTable } from "./grading";
 import { buildTonalTable } from "./tonal";
 
 /**
@@ -12,10 +13,9 @@ import { buildTonalTable } from "./tonal";
  * it in turn, and it is written once.
  *
  * Today the stage holds the highlights / shadows / whites / blacks adjustments (tonal.ts), the tone
- * curves (curves.ts) and the colour mixer (colorBands.ts). Full HSL and colour grading
- * are meant to be added here as further sections of the same loop. The order inside the loop is the
- * order the operations are applied: tonal, then the RGB curve, then the luminance curve, then the colour
- * mixer, each on the result of the one before.
+ * curves (curves.ts), the colour mixer (colorBands.ts) and colour grading (grading.ts). The order
+ * inside the loop is the order the operations are applied: tonal, the RGB curve, the luminance
+ * curve, the colour mixer, then colour grading, each on the result of the one before.
  *
  * Pure maths on RGBA bytes: no canvas, no DOM, so it runs on the main thread or in a Worker.
  */
@@ -28,6 +28,8 @@ export type ColorStagePlan = {
   curves: CurvesPlan | null;
   /** Colour mixer changes per hue; null when no mixer slider is active. */
   bands: BandTables | null;
+  /** Colour grading change to red, green and blue per luminance byte; null when no range is active. */
+  grading: Float32Array | null;
 };
 
 /** Returns null when nothing in the stage is active, so the caller can skip the pixel pass entirely. */
@@ -35,13 +37,14 @@ export function planColorStage(a: Adjustments, curves?: CurvesState): ColorStage
   const tonalTable = buildTonalTable(a);
   const curvesPlan = curves ? buildCurvesPlan(curves) : null;
   const bands = buildBandTables(a);
-  if (!tonalTable && !curvesPlan && !bands) return null;
-  return { tonalTable, curves: curvesPlan, bands };
+  const grading = buildGradingTable(a);
+  if (!tonalTable && !curvesPlan && !bands && !grading) return null;
+  return { tonalTable, curves: curvesPlan, bands, grading };
 }
 
 /** Applies the plan to RGBA pixel data in place. Alpha is untouched. */
 export function applyColorStage(data: Uint8ClampedArray, plan: ColorStagePlan): void {
-  const { tonalTable, bands } = plan;
+  const { tonalTable, bands, grading } = plan;
   const rgbLut = plan.curves?.rgbLut ?? null;
   const lumaTable = plan.curves?.lumaTable ?? null;
 
@@ -79,56 +82,67 @@ export function applyColorStage(data: Uint8ClampedArray, plan: ColorStagePlan): 
       }
     }
 
-    if (!bands) continue;
+    if (bands)
+      mixer: {
+        // Colour mixer, on the pixel as the steps above left it. Work out the hue first (it only needs
+        // the largest and smallest channel) so a pixel whose hue no band touches is skipped before any
+        // of the heavier lightness and saturation maths.
+        const r = data[i]!;
+        const g = data[i + 1]!;
+        const b = data[i + 2]!;
 
-    // Colour mixer, on the pixel as the steps above left it. Work out the hue first (it only needs
-    // the largest and smallest channel) so a pixel whose hue no band touches is skipped before any
-    // of the heavier lightness and saturation maths.
-    const r = data[i]!;
-    const g = data[i + 1]!;
-    const b = data[i + 2]!;
+        const max = r > g ? (r > b ? r : b) : g > b ? g : b;
+        const min = r < g ? (r < b ? r : b) : g < b ? g : b;
+        if (max === min) break mixer; // grey: no hue to adjust
+        const range = max - min;
 
-    const max = r > g ? (r > b ? r : b) : g > b ? g : b;
-    const min = r < g ? (r < b ? r : b) : g < b ? g : b;
-    if (max === min) continue; // grey: no hue to adjust
-    const range = max - min;
+        let hue: number;
+        if (max === r) hue = ((g - b) / range + (g < b ? 6 : 0)) * 60;
+        else if (max === g) hue = ((b - r) / range + 2) * 60;
+        else hue = ((r - g) / range + 4) * 60;
 
-    let hue: number;
-    if (max === r) hue = ((g - b) / range + (g < b ? 6 : 0)) * 60;
-    else if (max === g) hue = ((b - r) / range + 2) * 60;
-    else hue = ((r - g) / range + 4) * 60;
+        const at = Math.round((hue / 360) * BAND_TABLE_SIZE) % BAND_TABLE_SIZE;
+        if (bands.touched[at] === 0) break mixer;
 
-    const at = Math.round((hue / 360) * BAND_TABLE_SIZE) % BAND_TABLE_SIZE;
-    if (bands.touched[at] === 0) continue;
+        const sum = (max + min) / 255;
+        let l = sum / 2;
+        const s = l > 0.5 ? range / 255 / (2 - sum) : range / 255 / sum;
+        if (s < 0.02) break mixer;
 
-    const sum = (max + min) / 255;
-    let l = sum / 2;
-    const s = l > 0.5 ? range / 255 / (2 - sum) : range / 255 / sum;
-    if (s < 0.02) continue;
+        const satDelta = bands.sat[at]!;
+        const hueDelta = bands.hue[at]!;
+        const lumDelta = bands.lum[at]!;
 
-    const satDelta = bands.sat[at]!;
-    const hueDelta = bands.hue[at]!;
-    const lumDelta = bands.lum[at]!;
+        let newS = s;
+        if (satDelta !== 0) {
+          const scaled = s * (1 + satDelta / 100);
+          newS = scaled < 0 ? 0 : scaled > 1 ? 1 : scaled;
+        }
+        let newHue = hue;
+        if (hueDelta !== 0) {
+          newHue = (hue + hueDelta) % 360;
+          if (newHue < 0) newHue += 360;
+        }
+        if (lumDelta > 0) l += (1 - l) * lumDelta * LUM_STRENGTH;
+        else if (lumDelta < 0) l += l * lumDelta * LUM_STRENGTH;
 
-    let newS = s;
-    if (satDelta !== 0) {
-      const scaled = s * (1 + satDelta / 100);
-      newS = scaled < 0 ? 0 : scaled > 1 ? 1 : scaled;
+        const q = l < 0.5 ? l * (1 + newS) : l + newS - l * newS;
+        const p = 2 * l - q;
+        const hk = newHue / 360;
+        data[i] = Math.round(channel(p, q, hk + 1 / 3) * 255);
+        data[i + 1] = Math.round(channel(p, q, hk) * 255);
+        data[i + 2] = Math.round(channel(p, q, hk - 1 / 3) * 255);
+      }
+
+    // Colour grading, last: tints and shifts the pixel by amounts that depend only on its
+    // luminance. Greys are tinted too, so this runs for every pixel, including the ones the mixer
+    // skipped.
+    if (grading) {
+      const at = Math.round(0.2126 * data[i]! + 0.7152 * data[i + 1]! + 0.0722 * data[i + 2]!) * 3;
+      data[i] = data[i]! + grading[at]!;
+      data[i + 1] = data[i + 1]! + grading[at + 1]!;
+      data[i + 2] = data[i + 2]! + grading[at + 2]!;
     }
-    let newHue = hue;
-    if (hueDelta !== 0) {
-      newHue = (hue + hueDelta) % 360;
-      if (newHue < 0) newHue += 360;
-    }
-    if (lumDelta > 0) l += (1 - l) * lumDelta * LUM_STRENGTH;
-    else if (lumDelta < 0) l += l * lumDelta * LUM_STRENGTH;
-
-    const q = l < 0.5 ? l * (1 + newS) : l + newS - l * newS;
-    const p = 2 * l - q;
-    const hk = newHue / 360;
-    data[i] = Math.round(channel(p, q, hk + 1 / 3) * 255);
-    data[i + 1] = Math.round(channel(p, q, hk) * 255);
-    data[i + 2] = Math.round(channel(p, q, hk - 1 / 3) * 255);
   }
 }
 
