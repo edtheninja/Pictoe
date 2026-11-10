@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  BAND_CENTERS,
   BAND_TABLE_SIZE,
-  HUE_BAND_CENTERS,
   HUE_BAND_HALF_WIDTH,
-  activeBands,
-  buildBandTable,
+  buildBandTables,
   hasActiveBands,
 } from "./colorBands";
 import { applyColorStage, planColorStage } from "./colorStage";
@@ -212,12 +211,11 @@ describe("colour stage behaviour", () => {
   });
 
   it("reports which bands are active", () => {
-    expect(activeBands(adj({ satGreen: 10, satBlue: -3, satRed: 0.5 }))).toEqual([
-      "satGreen",
-      "satBlue",
-    ]);
     expect(hasActiveBands(adj({}))).toBe(false);
+    expect(hasActiveBands(adj({ satRed: 0.5 }))).toBe(false); // below the activation threshold
     expect(hasActiveBands(adj({ satPurple: -1 }))).toBe(true);
+    expect(hasActiveBands(adj({ hueBlue: 5 }))).toBe(true);
+    expect(hasActiveBands(adj({ lumOrange: -2 }))).toBe(true);
   });
 });
 
@@ -230,21 +228,21 @@ describe("planColorStage", () => {
   it("returns a plan with a band table as soon as one band is active", () => {
     const plan = planColorStage(adj({ satGreen: 30 }));
     expect(plan).not.toBeNull();
-    expect(plan!.bandTable).toBeInstanceOf(Float32Array);
+    expect(plan!.bands!.sat).toBeInstanceOf(Float32Array);
   });
 });
 
-describe("buildBandTable", () => {
+describe("buildBandTables (saturation)", () => {
   const at = (table: Float32Array, hue: number) =>
     table[Math.round((hue / 360) * BAND_TABLE_SIZE) % BAND_TABLE_SIZE]!;
 
   it("is null with no active band", () => {
-    expect(buildBandTable(adj({}))).toBeNull();
+    expect(buildBandTables(adj({}))).toBeNull();
   });
 
   it("peaks at the band's centre and fades to zero at its edges", () => {
-    const table = buildBandTable(adj({ satGreen: 80 }))!;
-    const centre = HUE_BAND_CENTERS.satGreen;
+    const table = buildBandTables(adj({ satGreen: 80 }))!.sat;
+    const centre = BAND_CENTERS.Green;
     expect(at(table, centre)).toBeCloseTo(80, 1);
     expect(at(table, centre + HUE_BAND_HALF_WIDTH / 2)).toBeLessThan(80);
     expect(at(table, centre + HUE_BAND_HALF_WIDTH / 2)).toBeGreaterThan(0);
@@ -253,16 +251,16 @@ describe("buildBandTable", () => {
   });
 
   it("is symmetric around the centre, including across 0° for the red band", () => {
-    const table = buildBandTable(adj({ satRed: 60 }))!;
+    const table = buildBandTables(adj({ satRed: 60 }))!.sat;
     for (const offset of [5, 15, 30, 44]) {
       expect(at(table, offset)).toBeCloseTo(at(table, 360 - offset), 1);
     }
   });
 
   it("adds neighbouring bands where they overlap", () => {
-    const both = buildBandTable(adj({ satOrange: 40, satYellow: 40 }))!;
-    const orange = buildBandTable(adj({ satOrange: 40 }))!;
-    const yellow = buildBandTable(adj({ satYellow: 40 }))!;
+    const both = buildBandTables(adj({ satOrange: 40, satYellow: 40 }))!.sat;
+    const orange = buildBandTables(adj({ satOrange: 40 }))!.sat;
+    const yellow = buildBandTables(adj({ satYellow: 40 }))!.sat;
     expect(at(both, 45)).toBeCloseTo(at(orange, 45) + at(yellow, 45), 3);
   });
 });

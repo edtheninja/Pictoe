@@ -3,7 +3,11 @@ import { RotateCcw } from "lucide-react";
 import { useEditor } from "@/state/editor/EditorContext";
 import { DEFAULT_ADJUSTMENTS, type AdjustmentDef } from "@/types/editor";
 
-export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
+/**
+ * `caption` is the short visible label when the full name (`def.label`, used for screen readers and
+ * history) would be too long or repeat what the surrounding group already says.
+ */
+export function AdjustmentSlider({ def, caption }: { def: AdjustmentDef; caption?: string }) {
   const { state, setAdjustment, beginInteraction, endInteraction, resetAdjustment } = useEditor();
   const value = state.edit.adjustments[def.key];
   const defaultValue = DEFAULT_ADJUSTMENTS[def.key];
@@ -19,7 +23,7 @@ export function AdjustmentSlider({ def }: { def: AdjustmentDef }) {
         className="min-w-0 truncate text-[13px] text-text-secondary"
         onDoubleClick={() => resetAdjustment(def.key)}
       >
-        {def.label}
+        {caption ?? def.label}
       </span>
 
       <Slider.Root

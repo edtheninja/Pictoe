@@ -47,6 +47,7 @@ const SETTINGS: {
   { label: "RGB curve", adjustments: {}, curves: { rgb: S_CURVE } },
   { label: "RGB + luma curves", adjustments: {}, curves: { rgb: S_CURVE, luma: S_CURVE } },
   { label: "one band", adjustments: { satGreen: 30 } },
+  { label: "one band H+S+L", adjustments: { hueGreen: 30, satGreen: 30, lumGreen: -20 } },
   {
     label: "tonal + curves + one band",
     adjustments: { ...TONAL, satGreen: 30 },

@@ -186,14 +186,14 @@ describe("opening a save from a newer build", () => {
       schemaVersion: SESSION_SCHEMA_VERSION + 5,
       edit: {
         ...currentSave().edit,
-        adjustments: { ...currentSave().edit.adjustments, hueRed: 30, curves: [1, 2] },
+        adjustments: { ...currentSave().edit.adjustments, futureKnob: 30, curves: [1, 2] },
         somethingNew: { a: 1 },
       },
     };
     const result = must(saved);
     expect(result.fromNewerVersion).toBe(true);
     expect(result.edit.adjustments.exposure).toBe(12);
-    expect(result.edit.adjustments).not.toHaveProperty("hueRed");
+    expect(result.edit.adjustments).not.toHaveProperty("futureKnob");
     expect(result.edit).not.toHaveProperty("somethingNew");
   });
 });

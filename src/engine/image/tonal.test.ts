@@ -233,12 +233,12 @@ describe("tonal and colour bands in one pass", () => {
     expect(planColorStage(adj({}))).toBeNull();
     const tonalOnly = planColorStage(adj({ shadows: 10 }))!;
     expect(tonalOnly.tonalTable).not.toBeNull();
-    expect(tonalOnly.bandTable).toBeNull();
+    expect(tonalOnly.bands).toBeNull();
     const bandsOnly = planColorStage(adj({ satRed: 10 }))!;
     expect(bandsOnly.tonalTable).toBeNull();
-    expect(bandsOnly.bandTable).not.toBeNull();
+    expect(bandsOnly.bands).not.toBeNull();
     const both = planColorStage(adj({ shadows: 10, satRed: 10 }))!;
     expect(both.tonalTable).not.toBeNull();
-    expect(both.bandTable).not.toBeNull();
+    expect(both.bands).not.toBeNull();
   });
 });

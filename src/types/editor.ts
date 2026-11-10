@@ -15,12 +15,25 @@ export type Adjustments = {
   sharpness: number;
   clarity: number;
   blur: number;
+  // Colour mixer: hue, saturation and luminance for each of six colour bands.
+  hueRed: number;
+  hueOrange: number;
+  hueYellow: number;
+  hueGreen: number;
+  hueBlue: number;
+  huePurple: number;
   satRed: number;
   satOrange: number;
   satYellow: number;
   satGreen: number;
   satBlue: number;
   satPurple: number;
+  lumRed: number;
+  lumOrange: number;
+  lumYellow: number;
+  lumGreen: number;
+  lumBlue: number;
+  lumPurple: number;
 };
 
 export type AdjustmentKey = keyof Adjustments;
@@ -104,12 +117,24 @@ export const DEFAULT_ADJUSTMENTS: Adjustments = {
   sharpness: 0,
   clarity: 0,
   blur: 0,
+  hueRed: 0,
+  hueOrange: 0,
+  hueYellow: 0,
+  hueGreen: 0,
+  hueBlue: 0,
+  huePurple: 0,
   satRed: 0,
   satOrange: 0,
   satYellow: 0,
   satGreen: 0,
   satBlue: 0,
   satPurple: 0,
+  lumRed: 0,
+  lumOrange: 0,
+  lumYellow: 0,
+  lumGreen: 0,
+  lumBlue: 0,
+  lumPurple: 0,
 };
 
 export const DEFAULT_CROP: CropRect = { x: 0, y: 0, width: 1, height: 1 };
@@ -136,10 +161,38 @@ export type AdjustmentDef = {
   min: number;
   max: number;
   step: number;
-  group: "light" | "color" | "detail";
+  group: "light" | "color" | "detail" | "bands";
   /** Progressive disclosure level */
   level: "basic" | "advanced";
 };
+
+/** The six colour bands of the colour mixer, in hue order. */
+export const BAND_NAMES = ["Red", "Orange", "Yellow", "Green", "Blue", "Purple"] as const;
+export type BandName = (typeof BAND_NAMES)[number];
+export const BAND_CHANNELS = ["hue", "sat", "lum"] as const;
+export type BandChannel = (typeof BAND_CHANNELS)[number];
+
+/** The adjustment key for one slider of the colour mixer, e.g. ("sat", "Red") is "satRed". */
+export const bandKey = (channel: BandChannel, band: BandName) =>
+  `${channel}${band}` as AdjustmentKey;
+
+const BAND_CHANNEL_WORD: Record<BandChannel, string> = {
+  hue: "hue",
+  sat: "saturation",
+  lum: "luminance",
+};
+
+const BAND_DEFS: AdjustmentDef[] = BAND_NAMES.flatMap((band) =>
+  BAND_CHANNELS.map((channel) => ({
+    key: bandKey(channel, band),
+    label: `${band} ${BAND_CHANNEL_WORD[channel]}`,
+    min: -100,
+    max: 100,
+    step: 1,
+    group: "bands" as const,
+    level: "advanced" as const,
+  })),
+);
 
 export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
   {
@@ -254,52 +307,7 @@ export const ADJUSTMENT_DEFS: AdjustmentDef[] = [
     level: "basic",
   },
   { key: "blur", label: "Blur", min: 0, max: 100, step: 1, group: "detail", level: "advanced" },
-  { key: "satRed", label: "Red", min: -100, max: 100, step: 1, group: "color", level: "advanced" },
-  {
-    key: "satOrange",
-    label: "Orange",
-    min: -100,
-    max: 100,
-    step: 1,
-    group: "color",
-    level: "advanced",
-  },
-  {
-    key: "satYellow",
-    label: "Yellow",
-    min: -100,
-    max: 100,
-    step: 1,
-    group: "color",
-    level: "advanced",
-  },
-  {
-    key: "satGreen",
-    label: "Green",
-    min: -100,
-    max: 100,
-    step: 1,
-    group: "color",
-    level: "advanced",
-  },
-  {
-    key: "satBlue",
-    label: "Blue",
-    min: -100,
-    max: 100,
-    step: 1,
-    group: "color",
-    level: "advanced",
-  },
-  {
-    key: "satPurple",
-    label: "Purple",
-    min: -100,
-    max: 100,
-    step: 1,
-    group: "color",
-    level: "advanced",
-  },
+  ...BAND_DEFS,
 ];
 
 export type MaskStrokeMode = "paint" | "erase";
