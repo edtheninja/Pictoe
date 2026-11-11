@@ -179,4 +179,20 @@ describe("render handler", () => {
       expect(b).not.toBe(a);
     });
   });
+
+  it("passes gradient shapes, invert and visible through to the renderer after a structured clone", () => {
+    const t = setup();
+    t.handle({ type: "setSource", sourceId: 1, bitmap: bitmap(), width: 100, height: 100 });
+    const gradient: MaskLayer = {
+      ...layer("g", 0),
+      shape: { kind: "radial", cx: 0.4, cy: 0.6, rx: 0.2, ry: 0.1, angle: 30, feather: 20 },
+      invert: true,
+      visible: false,
+    };
+    send(t.handle, 1, editWith(), [gradient, layer("b", 2)]);
+    const [first, second] = t.render.mock.calls[0]![6] as MaskLayer[];
+    expect(first).toEqual(gradient);
+    expect(second!.strokes).toHaveLength(2);
+    expect("shape" in second!).toBe(false);
+  });
 });

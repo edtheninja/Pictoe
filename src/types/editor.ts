@@ -401,11 +401,53 @@ export const DEFAULT_LOCAL_ADJUSTMENTS: LocalAdjustments = {
   temperature: 0,
 };
 
+/**
+ * A gradient mask: full effect at (x1, y1), fading in a straight line to no effect at (x2, y2),
+ * and constant beyond both ends. Points are relative to the SOURCE image (0-1 across its width
+ * and height, may lie outside 0-1), like brush strokes, so the gradient stays attached to the
+ * picture when the crop, rotation or flip change.
+ */
+export type LinearMaskShape = {
+  kind: "linear";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+};
+
+/**
+ * An elliptical mask. (cx, cy) is the centre, relative to the SOURCE image. rx and ry are the
+ * half-axes as fractions of the source's shorter side (same unit as a brush radius), and
+ * `angle` turns the x axis clockwise, in degrees, on the source image. `feather` (0-100) is the
+ * share of the radius, measured inwards from the edge, over which the effect fades out.
+ */
+export type RadialMaskShape = {
+  kind: "radial";
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  angle: number;
+  feather: number;
+};
+
+export type MaskShape = LinearMaskShape | RadialMaskShape;
+
+/**
+ * A local-adjustment area. With no `shape` it is a brush mask built from `strokes`; with a
+ * `shape` it is a gradient mask and `strokes` stays empty. `invert` and `visible` are only
+ * stored when they differ from the default (not inverted, visible), so older saves and
+ * layers read exactly as before. A hidden layer has no effect on the preview or the export.
+ * Layers render in array order, each on top of the ones before it.
+ */
 export type MaskLayer = {
   id: string;
   name: string;
   strokes: MaskStroke[];
   adjustments: LocalAdjustments;
+  shape?: MaskShape;
+  invert?: boolean;
+  visible?: boolean;
 };
 
 export type ImageAnalysis = {

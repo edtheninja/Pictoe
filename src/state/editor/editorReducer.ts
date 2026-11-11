@@ -14,12 +14,14 @@ import {
   type ImageAnalysis,
   type LocalAdjustments,
   type MaskLayer,
+  type MaskShape,
   type MaskStroke,
   type ProcessingState,
   type SourceImage,
   type ToolId,
   type Viewport,
 } from "@/types/editor";
+import { sanitizeShape } from "@/engine/image/maskShapes";
 
 type State = {
   source: SourceImage | null;
@@ -99,7 +101,13 @@ type Action =
   | { type: "setProcessing"; processing: ProcessingState }
   | { type: "setError"; error: string | null }
   | { type: "setShowOriginal"; value: boolean }
-  | { type: "addMaskLayer" }
+  | { type: "addMaskLayer"; shape?: MaskShape }
+  | { type: "duplicateMaskLayer"; id: string }
+  | { type: "renameMaskLayer"; id: string; name: string }
+  | { type: "setMaskLayerInverted"; id: string; inverted: boolean }
+  | { type: "setMaskLayerVisible"; id: string; visible: boolean }
+  | { type: "moveMaskLayer"; id: string; toIndex: number }
+  | { type: "setMaskShape"; id: string; shape: MaskShape }
   | { type: "deleteMaskLayer"; id: string }
   | { type: "setActiveMaskLayer"; id: string | null }
   | { type: "setMaskMode"; mode: "paint" | "erase" }
@@ -117,6 +125,7 @@ type Action =
   | { type: "setHealOffset"; offset: { dx: number; dy: number } | null };
 
 const HISTORY_LIMIT = 60;
+const MAX_MASK_NAME_LENGTH = 60;
 
 function pushHistory(state: State, snapshot: EditState): Pick<State, "past" | "future"> {
   const past = [...state.past, snapshot].slice(-HISTORY_LIMIT);
@@ -305,7 +314,12 @@ function reducer(state: State, action: Action): State {
     }
     case "addMaskLayer": {
       const id = crypto.randomUUID();
-      const name = `Area ${state.maskLayers.length + 1}`;
+      // An unusable shape (not a number, two coincident points) is refused rather than turned
+      // into a brush layer the caller did not ask for.
+      const shape = action.shape ? sanitizeShape(action.shape) : undefined;
+      if (action.shape && !shape) return state;
+      const label = !shape ? "Area" : shape.kind === "linear" ? "Gradient" : "Radial";
+      const name = `${label} ${state.maskLayers.length + 1}`;
 
       return {
         ...state,
@@ -317,9 +331,102 @@ function reducer(state: State, action: Action): State {
             name,
             strokes: [],
             adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS },
+            ...(shape ? { shape } : {}),
           },
         ],
         activeMaskLayerId: id,
+      };
+    }
+
+    // The copy goes straight after the original (so it renders on top of it) and becomes the
+    // active layer. Strokes are immutable, so the copy can share them.
+    case "duplicateMaskLayer": {
+      const index = state.maskLayers.findIndex((l) => l.id === action.id);
+      if (index === -1) return state;
+      const original = state.maskLayers[index]!;
+      const copy: MaskLayer = {
+        ...original,
+        id: crypto.randomUUID(),
+        name: `${original.name} copy`.slice(0, MAX_MASK_NAME_LENGTH),
+        strokes: [...original.strokes],
+        adjustments: { ...original.adjustments },
+        ...(original.shape ? { shape: { ...original.shape } } : {}),
+      };
+
+      return {
+        ...state,
+        ...pushMaskHistory(state),
+        maskLayers: [
+          ...state.maskLayers.slice(0, index + 1),
+          copy,
+          ...state.maskLayers.slice(index + 1),
+        ],
+        activeMaskLayerId: copy.id,
+      };
+    }
+
+    case "renameMaskLayer": {
+      const name = action.name.trim().slice(0, MAX_MASK_NAME_LENGTH);
+      const layer = state.maskLayers.find((l) => l.id === action.id);
+      if (!layer || name === "" || name === layer.name) return state;
+      return {
+        ...state,
+        ...pushMaskHistory(state),
+        maskLayers: state.maskLayers.map((l) => (l.id === action.id ? { ...l, name } : l)),
+      };
+    }
+
+    // `invert` and `visible` are only stored when they differ from the default, so setting
+    // the default again removes the key instead of writing `false` / `true`.
+    case "setMaskLayerInverted": {
+      const layer = state.maskLayers.find((l) => l.id === action.id);
+      if (!layer || (layer.invert === true) === action.inverted) return state;
+      return {
+        ...state,
+        ...pushMaskHistory(state),
+        maskLayers: state.maskLayers.map((l) => {
+          if (l.id !== action.id) return l;
+          const { invert: _drop, ...rest } = l;
+          return action.inverted ? { ...rest, invert: true } : rest;
+        }),
+      };
+    }
+
+    case "setMaskLayerVisible": {
+      const layer = state.maskLayers.find((l) => l.id === action.id);
+      if (!layer || (layer.visible !== false) === action.visible) return state;
+      return {
+        ...state,
+        ...pushMaskHistory(state),
+        maskLayers: state.maskLayers.map((l) => {
+          if (l.id !== action.id) return l;
+          const { visible: _drop, ...rest } = l;
+          return action.visible ? rest : { ...rest, visible: false };
+        }),
+      };
+    }
+
+    // Array order is render order: index 0 is rendered first, the last layer on top.
+    case "moveMaskLayer": {
+      const from = state.maskLayers.findIndex((l) => l.id === action.id);
+      if (from === -1 || !Number.isFinite(action.toIndex)) return state;
+      const to = Math.min(state.maskLayers.length - 1, Math.max(0, Math.trunc(action.toIndex)));
+      if (to === from) return state;
+      const layers = [...state.maskLayers];
+      const [moved] = layers.splice(from, 1);
+      layers.splice(to, 0, moved!);
+      return { ...state, ...pushMaskHistory(state), maskLayers: layers };
+    }
+
+    // Live, like painting a stroke: no history entry per pointer move. The overlay brackets a
+    // whole drag with recordMaskHistory. Only a gradient layer of the same kind can be reshaped.
+    case "setMaskShape": {
+      const layer = state.maskLayers.find((l) => l.id === action.id);
+      const shape = sanitizeShape(action.shape);
+      if (!layer?.shape || !shape || layer.shape.kind !== shape.kind) return state;
+      return {
+        ...state,
+        maskLayers: state.maskLayers.map((l) => (l.id === action.id ? { ...l, shape } : l)),
       };
     }
 
@@ -342,8 +449,9 @@ function reducer(state: State, action: Action): State {
     case "paintMaskStroke":
       return {
         ...state,
+        // Gradient layers have no strokes; painting on one does nothing.
         maskLayers: state.maskLayers.map((l) =>
-          l.id === action.id ? { ...l, strokes: [...l.strokes, action.stroke] } : l,
+          l.id === action.id && !l.shape ? { ...l, strokes: [...l.strokes, action.stroke] } : l,
         ),
       };
     case "setMaskLayerAdjustment":

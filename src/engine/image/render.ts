@@ -1,5 +1,5 @@
 import type { EditState, MaskLayer, Adjustments, CurvesState } from "@/types/editor";
-import type { MaskStroke } from "@/types/editor";
+import type { MaskShape, MaskStroke } from "@/types/editor";
 import {
   applyFilterFallback,
   filterString,
@@ -12,6 +12,7 @@ import { applyColorStage, planColorStage } from "./colorStage";
 import { exportWithFallback, type ExportResult } from "./exportFallback";
 import { healedSource } from "./healedSource";
 import { MaskCache } from "./maskCache";
+import { layerHasEffect, linearToPixels, radialToPixels } from "./maskShapes";
 import { timed } from "./profile";
 import {
   frameOf,
@@ -198,6 +199,47 @@ function drawMaskStrokes(
   }
 }
 
+/** Draws a gradient mask (white, fading to transparent) filling the whole canvas.
+ *  Cheap enough (one gradient fill) that it is redrawn every render, not cached. */
+function drawMaskShape(
+  canvas: AnyCanvas,
+  w: number,
+  h: number,
+  shape: MaskShape,
+  frame: MaskFrame,
+) {
+  const mctx = get2dContext(canvas)!;
+
+  if (shape.kind === "linear") {
+    const { from, to } = linearToPixels(shape, frame, w, h);
+    const grad = mctx.createLinearGradient(from.x, from.y, to.x, to.y);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    mctx.fillStyle = grad;
+    mctx.fillRect(0, 0, w, h);
+    return;
+  }
+
+  const { centre, axisX, axisY, innerStop } = radialToPixels(shape, frame, w, h);
+  mctx.save();
+  // Draw a unit circle, then let the transform stretch it into the ellipse (any rotation or
+  // flip is already in the axis vectors).
+  mctx.setTransform(axisX.x, axisX.y, axisY.x, axisY.y, centre.x, centre.y);
+  if (innerStop >= 1) {
+    mctx.fillStyle = "rgba(255,255,255,1)";
+  } else {
+    const grad = mctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(innerStop, "rgba(255,255,255,1)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    mctx.fillStyle = grad;
+  }
+  mctx.beginPath();
+  mctx.arc(0, 0, 1, 0, Math.PI * 2);
+  mctx.fill();
+  mctx.restore();
+}
+
 /** Preview masks are cached per layer. Exports skip the cache so a full-resolution
  *  mask isn't kept in memory afterwards. Resolution-independent either way. */
 const previewMaskCache = new MaskCache<AnyCanvas, MaskFrame>(
@@ -233,7 +275,7 @@ function applyMaskLayer(
   cached: boolean,
   frame: MaskFrame,
 ) {
-  if (layer.strokes.length === 0) return;
+  if (!layerHasEffect(layer)) return;
 
   const temp = createCanvas(w, h);
   const tctx = get2dContext(temp);
@@ -255,10 +297,18 @@ function applyMaskLayer(
     tctx.restore();
   }
 
-  const mask = cached
-    ? previewMaskCache.get(layer.id, layer.strokes, w, h, frame)
-    : rasterizeMask(w, h, layer.strokes, frame);
-  tctx.globalCompositeOperation = "destination-in";
+  let mask: AnyCanvas;
+  if (layer.shape) {
+    mask = createMaskCanvas(w, h);
+    drawMaskShape(mask, w, h, layer.shape, frame);
+  } else {
+    mask = cached
+      ? previewMaskCache.get(layer.id, layer.strokes, w, h, frame)
+      : rasterizeMask(w, h, layer.strokes, frame);
+  }
+  // Keep the filtered copy where the mask is (destination-in), or everywhere except where
+  // the mask is when the layer is inverted (destination-out).
+  tctx.globalCompositeOperation = layer.invert ? "destination-out" : "destination-in";
   tctx.drawImage(mask, 0, 0);
 
   ctx.drawImage(temp, 0, 0);

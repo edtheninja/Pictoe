@@ -3,6 +3,7 @@ import {
   SESSION_SCHEMA_VERSION,
   normalizeAdjustments,
   normalizeCrop,
+  normalizeMaskLayers,
   normalizeSession,
   type NormalizedSession,
 } from "./sessionSchema";
@@ -419,5 +420,75 @@ describe("fuzzing a valid save with junk", () => {
       expect(again.edit).toEqual(result.edit);
       expect(again.maskLayers).toEqual(result.maskLayers);
     }
+  });
+});
+
+describe("mask model v2 in saved sessions", () => {
+  const adjustments = { exposure: 5, contrast: 0, saturation: 0, temperature: 0 };
+  const radial = { kind: "radial", cx: 0.4, cy: 0.6, rx: 0.2, ry: 0.1, angle: 45, feather: 20 };
+  const linear = { kind: "linear", x1: 0.1, y1: 0.2, x2: 0.8, y2: 0.9 };
+  const layers = (raw: unknown) => normalizeMaskLayers(raw, makeId);
+
+  it("round-trips gradient layers, invert and visible", () => {
+    const saved = [
+      { id: "a", name: "Sky", strokes: [], adjustments, shape: linear, invert: true },
+      { id: "b", name: "Face", strokes: [], adjustments, shape: radial, visible: false },
+    ];
+    expect(layers(saved)).toEqual(saved);
+    expect(layers(layers(saved))).toEqual(layers(saved));
+  });
+
+  it("reads layers without the new fields exactly as before (no invert/visible keys added)", () => {
+    const old = [{ id: "a", name: "A", strokes: [{ x: 0.5, y: 0.5, radius: 0.05 }], adjustments }];
+    const out = layers(old);
+    expect(out).toEqual(old);
+    expect("invert" in out[0]!).toBe(false);
+    expect("visible" in out[0]!).toBe(false);
+    expect("shape" in out[0]!).toBe(false);
+  });
+
+  it("stores invert and visible only when they differ from the default", () => {
+    const out = layers([
+      { id: "a", name: "A", strokes: [], adjustments, invert: false, visible: true },
+      { id: "b", name: "B", strokes: [], adjustments, invert: "yes", visible: "no" },
+    ]);
+    for (const l of out) {
+      expect("invert" in l).toBe(false);
+      expect("visible" in l).toBe(false);
+    }
+  });
+
+  it("clamps a damaged shape and drops one that cannot be repaired, keeping the layer", () => {
+    const out = layers([
+      { id: "a", name: "A", strokes: [], adjustments, shape: { ...radial, rx: 50, feather: 900 } },
+      {
+        id: "b",
+        name: "B",
+        strokes: [{ x: 0.5, y: 0.5, radius: 0.05 }],
+        adjustments,
+        shape: { kind: "linear", x1: 0.5, y1: 0.5, x2: 0.5, y2: 0.5 },
+      },
+      { id: "c", name: "C", strokes: [], adjustments, shape: "oval" },
+    ]);
+    expect(out[0]!.shape).toMatchObject({ kind: "radial", rx: 2, feather: 100 });
+    // Unrepairable: the layer stays (with its adjustments) as a brush layer and keeps its strokes.
+    expect("shape" in out[1]!).toBe(false);
+    expect(out[1]!.strokes).toHaveLength(1);
+    expect(out[1]!.adjustments.exposure).toBe(5);
+    expect("shape" in out[2]!).toBe(false);
+  });
+
+  it("gives a gradient layer no strokes, even if the save has some", () => {
+    const [layer] = layers([
+      {
+        id: "a",
+        name: "A",
+        strokes: [{ x: 0.5, y: 0.5, radius: 0.05 }],
+        adjustments,
+        shape: radial,
+      },
+    ]);
+    expect(layer!.shape).toBeDefined();
+    expect(layer!.strokes).toEqual([]);
   });
 });

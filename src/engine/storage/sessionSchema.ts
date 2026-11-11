@@ -12,6 +12,7 @@ import {
   type MaskLayer,
   type MaskStroke,
 } from "@/types/editor";
+import { sanitizeShape } from "@/engine/image/maskShapes";
 import { normalizeCurves } from "@/engine/image/curves";
 
 /**
@@ -144,15 +145,24 @@ export function normalizeMaskLayers(raw: unknown, makeId: () => string): MaskLay
     let id = typeof item["id"] === "string" && item["id"] !== "" ? item["id"] : makeId();
     while (seen.has(id)) id = makeId();
     seen.add(id);
-    out.push({
+    // A saved shape that can't be repaired is dropped and the layer reads as an (empty) brush
+    // layer, which renders nothing, rather than discarding the layer's adjustments with it.
+    const shape = item["shape"] === undefined ? null : sanitizeShape(item["shape"]);
+    const layer: MaskLayer = {
       id,
       name:
         typeof item["name"] === "string" && item["name"] !== ""
           ? item["name"]
           : `Area ${out.length + 1}`,
-      strokes: normalizeMaskStrokes(item["strokes"]),
+      // A gradient layer has no strokes.
+      strokes: shape ? [] : normalizeMaskStrokes(item["strokes"]),
       adjustments: normalizeLocalAdjustments(item["adjustments"]),
-    });
+    };
+    if (shape) layer.shape = shape;
+    // Only the non-default values are stored (see MaskLayer), so older saves read the same.
+    if (item["invert"] === true) layer.invert = true;
+    if (item["visible"] === false) layer.visible = false;
+    out.push(layer);
   }
   return out;
 }
