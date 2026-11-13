@@ -114,8 +114,20 @@ test.describe("curves", () => {
     await page.getByRole("button", { name: "Add point" }).click();
     await rgbPoint(page, 2, 3).focus();
     for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
+    // All 12 presses are applied, and the preview has finished drawing the result: the picture
+    // may still be catching up when it first crosses the threshold, so wait until it stops moving.
+    await expect(rgbPoint(page, 2, 3)).toHaveAttribute("aria-valuenow", "38");
     await expect.poll(() => greenOfBackground(page)).toBeLessThan(before - 8);
-    const edited = await greenOfBackground(page);
+    let edited = await greenOfBackground(page);
+    await expect
+      .poll(async () => {
+        await page.waitForTimeout(300);
+        const now = await greenOfBackground(page);
+        const moved = Math.abs(now - edited);
+        edited = now;
+        return moved;
+      })
+      .toBe(0);
     await page.waitForTimeout(1500); // the session autosaves after a short pause
 
     await page.reload();
