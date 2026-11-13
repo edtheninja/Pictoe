@@ -106,7 +106,7 @@ User accounts · social features · collaboration · cloud galleries · template
 ### D. Local editing
 | ID | Requirement | P | Status |
 |---|---|---|---|
-| FR-30 | Brush-painted areas, multiple layers, each with exposure, contrast, saturation, temperature | P1 | ✅ |
+| FR-30 | Brush-painted areas, multiple layers, each with exposure, contrast, saturation, temperature, plus highlights, shadows, tint, clarity, sharpness | P1 | ✅ |
 | FR-31 | Eraser, adjustable brush size and softness | P1 | ✅ |
 | FR-32 | Area undo/redo (scoped to the Local tool) and persistence across sessions | P1 | ✅ |
 | FR-33 | Gradient and radial masks; invert, duplicate, reorder, rename, show/hide | P2 | ⬜ |

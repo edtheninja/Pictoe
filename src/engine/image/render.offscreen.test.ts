@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderImage } from "./render";
 import { resetCanvasFilterSupportCache } from "./canvasFilter";
-import { DEFAULT_EDIT_STATE, type EditState, type MaskLayer } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  type EditState,
+  type MaskLayer,
+  DEFAULT_LOCAL_ADJUSTMENTS,
+} from "@/types/editor";
 
 /**
  * The render pipeline must run with no `document` at all, because that is what a Web Worker is.
@@ -81,7 +86,7 @@ const everything = (): { edit: EditState; layers: MaskLayer[] } => ({
       id: `layer-${nextId++}`,
       name: "local",
       strokes: [{ x: 0.5, y: 0.5, radius: 0.1 }],
-      adjustments: { exposure: 10, contrast: 0, saturation: 0, temperature: 20 },
+      adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 10, temperature: 20 },
     },
   ],
 });

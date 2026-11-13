@@ -49,6 +49,45 @@ test.describe("gradient and radial masks", () => {
       .toBeGreaterThan(before.middle + 20);
   });
 
+  test("More controls reveals the five newer sliders, and shadows lift only inside the area", async ({
+    page,
+  }) => {
+    await openLocal(page);
+    const before = {
+      middle: luma(await pixelAt(page, MIDDLE)),
+      corner: luma(await pixelAt(page, CORNER)),
+    };
+    await page.getByRole("button", { name: "Radial", exact: true }).click();
+
+    for (const name of ["Exposure", "Contrast", "Saturation", "Temperature"]) {
+      await expect(page.getByRole("slider", { name })).toBeVisible();
+    }
+    await expect(page.getByRole("slider", { name: "Shadows" })).toHaveCount(0);
+
+    await page.getByRole("button", { name: "More controls (5)" }).click();
+    for (const name of ["Highlights", "Shadows", "Tint", "Clarity", "Sharpness"]) {
+      await expect(page.getByRole("slider", { name })).toBeVisible();
+    }
+    // Sharpness starts at 0 and has no negative side.
+    await expect(page.getByRole("slider", { name: "Sharpness" })).toHaveAttribute("min", "0");
+
+    const shadows = page.getByRole("slider", { name: "Shadows" });
+    await shadows.focus();
+    await page.keyboard.press("End");
+    await expect
+      .poll(async () => luma(await pixelAt(page, MIDDLE)))
+      .toBeGreaterThan(before.middle + 8);
+    expect(Math.abs(luma(await pixelAt(page, CORNER)) - before.corner)).toBeLessThan(3);
+
+    // Closing the section hides the sliders but keeps the values (and shows a dot).
+    await page.getByRole("button", { name: /Fewer controls/ }).click();
+    await expect(page.getByRole("slider", { name: "Shadows" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /More controls/ })).toContainText("•");
+    await expect
+      .poll(async () => luma(await pixelAt(page, MIDDLE)))
+      .toBeGreaterThan(before.middle + 8);
+  });
+
   test("dragging the centre handle moves the area, and one undo puts it back", async ({ page }) => {
     await openLocal(page);
     await page.getByRole("button", { name: "Radial", exact: true }).click();

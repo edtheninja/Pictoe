@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 import { createRenderHandler } from "./renderHandler";
 import { planStrokeUpdate } from "./incremental";
 import type { FromWorker } from "./renderProtocol";
-import { DEFAULT_EDIT_STATE, type EditState, type MaskLayer } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  type EditState,
+  type MaskLayer,
+  DEFAULT_LOCAL_ADJUSTMENTS,
+} from "@/types/editor";
 
 const bitmap = (w = 10, h = 10) =>
   ({ width: w, height: h, close: vi.fn() }) as unknown as ImageBitmap;
@@ -28,7 +33,7 @@ const layer = (id: string, n: number): MaskLayer => ({
   id,
   name: id,
   strokes: Array.from({ length: n }, (_, i) => ({ x: i / 10, y: 0.5, radius: 0.1 })),
-  adjustments: { exposure: 5, contrast: 0, saturation: 0, temperature: 0 },
+  adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 5 },
 });
 const send = (
   h: ReturnType<typeof setup>["handle"],

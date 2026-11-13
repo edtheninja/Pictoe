@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderImage } from "./render";
-import { DEFAULT_EDIT_STATE, type EditState, type MaskLayer } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  type EditState,
+  type MaskLayer,
+  DEFAULT_LOCAL_ADJUSTMENTS,
+} from "@/types/editor";
 import { defaultShape } from "./maskShapes";
 
 /**
@@ -45,7 +50,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const SRC_W = 1200;
 const SRC_H = 800;
-const adjustments = { exposure: 10, contrast: 0, saturation: 0, temperature: 0 };
+const adjustments = { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 10 };
 
 const layer = (extra: Partial<MaskLayer>): MaskLayer => ({
   id: "layer",

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderImage } from "./render";
 import { resetCanvasFilterSupportCache } from "./canvasFilter";
-import { DEFAULT_EDIT_STATE, type EditState, type MaskLayer } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  type EditState,
+  type MaskLayer,
+  DEFAULT_LOCAL_ADJUSTMENTS,
+} from "@/types/editor";
 
 /**
  * Runs the real renderImage against a recording fake canvas that either honours ctx.filter
@@ -53,7 +58,7 @@ const mask: MaskLayer = {
   id: "m",
   name: "m",
   strokes: [{ x: 0.5, y: 0.5, radius: 0.1 }],
-  adjustments: { exposure: 10, contrast: 0, saturation: 0, temperature: 0 },
+  adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 10 },
 };
 
 function render(edit: EditState, withMask = false) {

@@ -5,6 +5,7 @@ import {
   type MaskLayer,
   type MaskShape,
   type RadialMaskShape,
+  DEFAULT_LOCAL_ADJUSTMENTS,
 } from "@/types/editor";
 import { frameOf, frameOutputSize } from "./maskSpace";
 import { shapeCoverage } from "./maskShapes";
@@ -225,7 +226,7 @@ describe("maskThumbnail", () => {
     id: "a",
     name: "A",
     strokes: [],
-    adjustments: { exposure: 0, contrast: 0, saturation: 0, temperature: 0 },
+    adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS },
     ...patch,
   });
   const TW = 30;

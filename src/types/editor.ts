@@ -392,6 +392,11 @@ export type LocalAdjustments = {
   contrast: number;
   saturation: number;
   temperature: number;
+  highlights: number;
+  shadows: number;
+  tint: number;
+  clarity: number;
+  sharpness: number;
 };
 
 export const DEFAULT_LOCAL_ADJUSTMENTS: LocalAdjustments = {
@@ -399,7 +404,35 @@ export const DEFAULT_LOCAL_ADJUSTMENTS: LocalAdjustments = {
   contrast: 0,
   saturation: 0,
   temperature: 0,
+  highlights: 0,
+  shadows: 0,
+  tint: 0,
+  clarity: 0,
+  sharpness: 0,
 };
+
+/**
+ * The sliders a local area has, in display order. "basic" ones always show, "advanced" ones sit
+ * behind "More controls", the same split as the global panels. Ranges match the global sliders
+ * of the same name, and the session loader clamps saved values to them.
+ */
+export const LOCAL_ADJUSTMENT_DEFS: {
+  key: keyof LocalAdjustments;
+  label: string;
+  min: number;
+  max: number;
+  level: "basic" | "advanced";
+}[] = [
+  { key: "exposure", label: "Exposure", min: -100, max: 100, level: "basic" },
+  { key: "contrast", label: "Contrast", min: -100, max: 100, level: "basic" },
+  { key: "saturation", label: "Saturation", min: -100, max: 100, level: "basic" },
+  { key: "temperature", label: "Temperature", min: -100, max: 100, level: "basic" },
+  { key: "highlights", label: "Highlights", min: -100, max: 100, level: "advanced" },
+  { key: "shadows", label: "Shadows", min: -100, max: 100, level: "advanced" },
+  { key: "tint", label: "Tint", min: -100, max: 100, level: "advanced" },
+  { key: "clarity", label: "Clarity", min: -100, max: 100, level: "advanced" },
+  { key: "sharpness", label: "Sharpness", min: 0, max: 100, level: "advanced" },
+];
 
 /**
  * A gradient mask: full effect at (x1, y1), fading in a straight line to no effect at (x2, y2),

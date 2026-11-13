@@ -11,7 +11,12 @@ import {
   strokeToSource,
 } from "./maskSpace";
 import { outputSize } from "./render";
-import { DEFAULT_EDIT_STATE, type EditState, type MaskLayer } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  type EditState,
+  type MaskLayer,
+  DEFAULT_LOCAL_ADJUSTMENTS,
+} from "@/types/editor";
 
 const SRC_W = 1200;
 const SRC_H = 800;
@@ -170,7 +175,7 @@ describe("migrating older saved masks", () => {
     id: "a",
     name: "Area 1",
     strokes,
-    adjustments: { exposure: 12, contrast: 0, saturation: 0, temperature: 0 },
+    adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 12 },
   });
 
   it("converts strokes using the saved edit and keeps everything else", () => {

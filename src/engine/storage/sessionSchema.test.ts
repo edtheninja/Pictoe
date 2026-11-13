@@ -12,6 +12,7 @@ import {
   DEFAULT_ADJUSTMENTS,
   DEFAULT_CROP,
   DEFAULT_EDIT_STATE,
+  DEFAULT_LOCAL_ADJUSTMENTS,
 } from "@/types/editor";
 
 let counter = 0;
@@ -76,7 +77,13 @@ const currentSave = () => ({
         { x: 0.5, y: 0.5, radius: 0.1, softness: 40, mode: "paint" as const },
         { x: 0.52, y: 0.5, radius: 0.05, mode: "erase" as const },
       ],
-      adjustments: { exposure: 15, contrast: 5, saturation: -10, temperature: 8 },
+      adjustments: {
+        ...DEFAULT_LOCAL_ADJUSTMENTS,
+        exposure: 15,
+        contrast: 5,
+        saturation: -10,
+        temperature: 8,
+      },
     },
   ],
   maskSpace: "source" as const,
@@ -113,7 +120,43 @@ describe("opening saves from older builds", () => {
 
   it("keeps the layers of an old save intact", () => {
     const { maskLayers } = must(oldestSave());
-    expect(maskLayers).toEqual(oldestSave().maskLayers);
+    // The save predates the newer local sliders, so they read as 0; everything else is untouched.
+    expect(maskLayers).toEqual(
+      oldestSave().maskLayers.map((l) => ({
+        ...l,
+        adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, ...l.adjustments },
+      })),
+    );
+  });
+});
+
+describe("local sliders added after a save was written", () => {
+  const layerWith = (adjustments: unknown) =>
+    normalizeMaskLayers([{ id: "a", name: "A", strokes: [], adjustments }], makeId)[0]!.adjustments;
+
+  it("read as 0 when the save has none of them", () => {
+    expect(layerWith({ exposure: 10 })).toEqual({ ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 10 });
+  });
+
+  it("keep their values, each clamped to its own slider's range", () => {
+    expect(
+      layerWith({ highlights: -40, shadows: 500, tint: -500, clarity: 25, sharpness: 60 }),
+    ).toEqual({
+      ...DEFAULT_LOCAL_ADJUSTMENTS,
+      highlights: -40,
+      shadows: 100,
+      tint: -100,
+      clarity: 25,
+      sharpness: 60,
+    });
+  });
+
+  it("have no negative sharpness (the slider starts at 0), and repair non-numbers", () => {
+    expect(layerWith({ sharpness: -30 }).sharpness).toBe(0);
+    expect(layerWith({ sharpness: 400 }).sharpness).toBe(100);
+    expect(layerWith({ highlights: "lots", tint: null, clarity: Number.NaN })).toEqual(
+      DEFAULT_LOCAL_ADJUSTMENTS,
+    );
   });
 });
 
@@ -305,12 +348,7 @@ describe("damaged or hand-edited saves", () => {
     expect(maskLayers).toHaveLength(3);
     expect(new Set(maskLayers.map((l) => l.id)).size).toBe(3);
     expect(maskLayers[0]!.strokes).toHaveLength(1);
-    expect(maskLayers[0]!.adjustments).toEqual({
-      exposure: 0,
-      contrast: 100,
-      saturation: 0,
-      temperature: 0,
-    });
+    expect(maskLayers[0]!.adjustments).toEqual({ ...DEFAULT_LOCAL_ADJUSTMENTS, contrast: 100 });
     expect(maskLayers[1]!.name).toBe("Area 2");
     expect(maskLayers[1]!.strokes).toEqual([]);
     expect(maskLayers[2]!.name).toBe("No id");
@@ -424,7 +462,7 @@ describe("fuzzing a valid save with junk", () => {
 });
 
 describe("mask model v2 in saved sessions", () => {
-  const adjustments = { exposure: 5, contrast: 0, saturation: 0, temperature: 0 };
+  const adjustments = { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 5 };
   const radial = { kind: "radial", cx: 0.4, cy: 0.6, rx: 0.2, ry: 0.1, angle: 45, feather: 20 };
   const linear = { kind: "linear", x1: 0.1, y1: 0.2, x2: 0.8, y2: 0.9 };
   const layers = (raw: unknown) => normalizeMaskLayers(raw, makeId);

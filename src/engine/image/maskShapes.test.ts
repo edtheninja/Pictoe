@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_EDIT_STATE, type MaskLayer, type MaskShape } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  type MaskLayer,
+  type MaskShape,
+  DEFAULT_LOCAL_ADJUSTMENTS,
+} from "@/types/editor";
 import { frameOf } from "./maskSpace";
 import { defaultShape, layerHasEffect, sanitizeShape, shapeCoverage } from "./maskShapes";
 
@@ -202,7 +207,7 @@ describe("layerHasEffect", () => {
     id: "a",
     name: "A",
     strokes: [],
-    adjustments: { exposure: 10, contrast: 0, saturation: 0, temperature: 0 },
+    adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 10 },
   };
 
   it("is false for an empty brush layer, true once something is painted", () => {

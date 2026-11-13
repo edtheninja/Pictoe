@@ -12,6 +12,7 @@ import { applyColorStage, planColorStage } from "./colorStage";
 import { exportWithFallback, type ExportResult } from "./exportFallback";
 import { healedSource } from "./healedSource";
 import { MaskCache } from "./maskCache";
+import { buildLocalFilterParams, localStageAdjustments } from "./localAdjustments";
 import { layerHasEffect, linearToPixels, radialToPixels } from "./maskShapes";
 import { timed } from "./profile";
 import {
@@ -122,31 +123,13 @@ function applyColorStagePass(
   w: number,
   h: number,
   a: Adjustments,
-  curves: CurvesState,
+  curves?: CurvesState,
 ) {
   const plan = planColorStage(a, curves);
   if (!plan) return;
   const imageData = ctx.getImageData(0, 0, w, h);
   applyColorStage(imageData.data, plan);
   ctx.putImageData(imageData, 0, 0);
-}
-
-/** Same three CSS filters as buildFilter, but for a mask layer's four
- *  parameters — no clarity/vibrance/blur, since local areas keep a smaller,
- *  more contained parameter set than global adjustments. */
-function buildLocalFilterParams(a: {
-  exposure: number;
-  contrast: number;
-  saturation: number;
-}): FilterParams {
-  const brightness = 1 + (a.exposure / 100) * 0.55;
-  const contrast = 1 + (a.contrast / 100) * 0.6;
-  return {
-    ...NO_FILTER,
-    brightness: clamp(brightness, 0.05, 4),
-    contrast: clamp(contrast, 0.05, 4),
-    saturate: Math.max(0, 1 + a.saturation / 100),
-  };
 }
 
 function createMaskCanvas(w: number, h: number): AnyCanvas {
@@ -288,14 +271,27 @@ function applyMaskLayer(
   if (nativeLocal) tctx.filter = "none";
   else applyFilterFallback(tctx, w, h, localFilter);
 
-  if (Math.abs(layer.adjustments.temperature) > 0.5) {
+  // Colour casts, the same blend layers as the global temperature and tint sliders.
+  const cast = (color: string, amount: number, strength: number) => {
+    if (amount < 0.5) return;
     tctx.save();
     tctx.globalCompositeOperation = "soft-light";
-    tctx.globalAlpha = clamp(Math.abs(layer.adjustments.temperature) / 100, 0, 1) * 0.35;
-    tctx.fillStyle = layer.adjustments.temperature > 0 ? "#ff9a3c" : "#3ca5ff";
+    tctx.globalAlpha = clamp(amount / 100, 0, 1) * strength;
+    tctx.fillStyle = color;
     tctx.fillRect(0, 0, w, h);
     tctx.restore();
-  }
+  };
+  const adj = layer.adjustments;
+  cast("#ff9a3c", Math.max(0, adj.temperature), 0.35);
+  cast("#3ca5ff", Math.max(0, -adj.temperature), 0.35);
+  cast("#ff3cf0", Math.max(0, adj.tint), 0.25);
+  cast("#54ff3c", Math.max(0, -adj.tint), 0.25);
+
+  // Highlights and shadows: the colour stage, run on this area's scratch canvas only.
+  applyColorStagePass(tctx, w, h, localStageAdjustments(adj));
+
+  // Sharpness: unsharp mask on the scratch canvas, so only the masked part is sharpened.
+  sharpen(tctx, temp as RenderTarget, w, h, adj.sharpness);
 
   let mask: AnyCanvas;
   if (layer.shape) {

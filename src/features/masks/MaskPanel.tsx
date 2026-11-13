@@ -16,18 +16,11 @@ import {
 import { useEditor } from "@/state/editor/EditorContext";
 import { defaultShape } from "@/engine/image/maskShapes";
 import { frameOf } from "@/engine/image/maskSpace";
-import type { LocalAdjustments } from "@/types/editor";
+import { LOCAL_ADJUSTMENT_DEFS } from "@/types/editor";
 import { MaskThumbnail } from "./MaskThumbnail";
 
 const ICON_BUTTON =
   "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30";
-
-const PARAMS: { key: keyof LocalAdjustments; label: string }[] = [
-  { key: "exposure", label: "Exposure" },
-  { key: "contrast", label: "Contrast" },
-  { key: "saturation", label: "Saturation" },
-  { key: "temperature", label: "Temperature" },
-];
 
 export function MaskPanel() {
   const {
@@ -55,6 +48,9 @@ export function MaskPanel() {
   const activeShape = activeLayer?.shape;
   const frame = state.source ? frameOf(state.source.width, state.source.height, state.edit) : null;
   const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const basicDefs = LOCAL_ADJUSTMENT_DEFS.filter((d) => d.level === "basic");
+  const advancedDefs = LOCAL_ADJUSTMENT_DEFS.filter((d) => d.level === "advanced");
 
   return (
     <div className="flex flex-col gap-md">
@@ -347,28 +343,42 @@ export function MaskPanel() {
 
               {active && (
                 <div className="mt-sm flex flex-col gap-sm">
-                  {PARAMS.map((p) => (
-                    <label key={p.key} className="flex items-center gap-sm text-[12px]">
-                      <span className="w-20 shrink-0 text-text-secondary">{p.label}</span>
+                  {[...basicDefs, ...(showAdvanced ? advancedDefs : [])].map((def) => (
+                    <label key={def.key} className="flex items-center gap-sm text-[12px]">
+                      <span className="w-20 shrink-0 text-text-secondary">{def.label}</span>
 
                       <input
                         type="range"
-                        min={-100}
-                        max={100}
+                        min={def.min}
+                        max={def.max}
                         step={1}
-                        value={layer.adjustments[p.key]}
+                        value={layer.adjustments[def.key]}
                         onPointerDown={() => recordMaskHistory()}
                         onChange={(e) =>
-                          setMaskLayerAdjustment(layer.id, p.key, Number(e.target.value))
+                          setMaskLayerAdjustment(layer.id, def.key, Number(e.target.value))
                         }
                         className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
                       />
 
                       <span className="w-8 shrink-0 text-right tabular-nums text-text-muted">
-                        {layer.adjustments[p.key]}
+                        {layer.adjustments[def.key]}
                       </span>
                     </label>
                   ))}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced((v) => !v)}
+                    aria-expanded={showAdvanced}
+                    className="self-start rounded text-[12px] text-text-muted transition-colors duration-150 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {showAdvanced ? "Fewer controls" : `More controls (${advancedDefs.length})`}
+                    {!showAdvanced && advancedDefs.some((d) => layer.adjustments[d.key] !== 0) && (
+                      <span className="ml-xs text-accent" aria-label="(some are adjusted)">
+                        •
+                      </span>
+                    )}
+                  </button>
                 </div>
               )}
             </li>

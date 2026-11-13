@@ -145,6 +145,48 @@ describe("local areas", () => {
     expect(painted.maskLayers[1]!.strokes).toHaveLength(0);
   });
 
+  it("a new layer starts with every local slider at zero, including the newer ones", () => {
+    const layer = withLayer().maskLayers[0]!;
+    expect(layer.adjustments).toEqual({
+      exposure: 0,
+      contrast: 0,
+      saturation: 0,
+      temperature: 0,
+      highlights: 0,
+      shadows: 0,
+      tint: 0,
+      clarity: 0,
+      sharpness: 0,
+    });
+  });
+
+  it("setMaskLayerAdjustment reaches the newer sliders, and a copy keeps them", () => {
+    const s = withLayer();
+    const id = s.maskLayers[0]!.id;
+    let next = s;
+    for (const [key, value] of [
+      ["highlights", -35],
+      ["shadows", 20],
+      ["tint", 12],
+      ["clarity", 45],
+      ["sharpness", 60],
+    ] as const) {
+      next = reducer(next, { type: "setMaskLayerAdjustment", id, key, value });
+    }
+    expect(next.maskLayers[0]!.adjustments).toMatchObject({
+      highlights: -35,
+      shadows: 20,
+      tint: 12,
+      clarity: 45,
+      sharpness: 60,
+      exposure: 0,
+    });
+
+    const copy = reducer(next, { type: "duplicateMaskLayer", id }).maskLayers[1]!;
+    expect(copy.adjustments).toEqual(next.maskLayers[0]!.adjustments);
+    expect(copy.adjustments).not.toBe(next.maskLayers[0]!.adjustments);
+  });
+
   it("setMaskLayerAdjustment changes one value on one layer", () => {
     const two = reducer(withLayer(), { type: "addMaskLayer" });
     const s = reducer(two, {

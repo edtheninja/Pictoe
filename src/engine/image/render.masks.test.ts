@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderImage } from "./render";
-import { DEFAULT_EDIT_STATE, type EditState, type MaskLayer } from "@/types/editor";
+import {
+  DEFAULT_EDIT_STATE,
+  type EditState,
+  type MaskLayer,
+  DEFAULT_LOCAL_ADJUSTMENTS,
+} from "@/types/editor";
 
 /**
  * These tests run the real renderImage with a fake canvas that records every call, then
@@ -45,7 +50,7 @@ const layer = (id: string, x: number, y: number): MaskLayer => ({
   id,
   name: id,
   strokes: [{ x, y, radius: 0.05 }],
-  adjustments: { exposure: 10, contrast: 0, saturation: 0, temperature: 0 },
+  adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, exposure: 10 },
 });
 
 /** Renders and returns the [cx, cy, radius] of the brush circle that was drawn. */

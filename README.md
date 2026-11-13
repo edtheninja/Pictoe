@@ -17,7 +17,7 @@ The idea behind it is **progressive power**: complexity is revealed when you nee
 - **14 non-destructive global adjustments**, grouped as **Light** (exposure, brightness, contrast, highlights, shadows, whites, blacks), **Color** (saturation, vibrance, temperature, tint) and **Detail** (clarity, sharpness, blur). Basic controls show first; "More controls" reveals the rest.
 - **Per-colour saturation** for red, orange, yellow, green, blue and purple, so you can lift the greens without touching skin tones.
 - **Crop** with aspect-ratio presets, 90° rotation and horizontal flip.
-- **Local areas ("Local" tool).** Paint a region with a brush, then give that area its own exposure, contrast, saturation and temperature. Stack as many areas as you like. The brush has adjustable size and softness, plus an eraser. Areas have their own undo/redo and are saved with your session.
+- **Local areas ("Local" tool).** Paint a region with a brush, then give that area its own exposure, contrast, saturation and temperature, with highlights, shadows, tint, clarity and sharpness behind "More controls". Stack as many areas as you like. The brush has adjustable size and softness, plus an eraser. Areas have their own undo/redo and are saved with your session.
 - **Clone tool.** Pick a clean area as the source, then paint over a blemish. Every stroke is saved as data, so a whole drag is one undo step and the strokes follow your crop, rotation and flip.
 - **Presets.** Five built-in looks (Warm Film, Moody B&W, Vivid Pop, Cool Blue, Soft Portrait) plus your own, saved locally.
 

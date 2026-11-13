@@ -4,6 +4,7 @@ import {
   DEFAULT_CROP,
   DEFAULT_EDIT_STATE,
   DEFAULT_LOCAL_ADJUSTMENTS,
+  LOCAL_ADJUSTMENT_DEFS,
   type Adjustments,
   type CropRect,
   type EditState,
@@ -130,8 +131,10 @@ function normalizeMaskStrokes(raw: unknown): MaskStroke[] {
 function normalizeLocalAdjustments(raw: unknown): LocalAdjustments {
   const source = isRecord(raw) ? raw : {};
   const out = { ...DEFAULT_LOCAL_ADJUSTMENTS };
-  for (const key of Object.keys(DEFAULT_LOCAL_ADJUSTMENTS) as (keyof LocalAdjustments)[]) {
-    out[key] = num(source[key], DEFAULT_LOCAL_ADJUSTMENTS[key], -100, 100);
+  // Keys an older save lacks (new sliders) read as their default; values are clamped to the
+  // slider's own range (sharpness has no negative side).
+  for (const def of LOCAL_ADJUSTMENT_DEFS) {
+    out[def.key] = num(source[def.key], DEFAULT_LOCAL_ADJUSTMENTS[def.key], def.min, def.max);
   }
   return out;
 }
