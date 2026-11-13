@@ -28,7 +28,7 @@ test.describe("gradient and radial masks", () => {
     for (const id of ["centre", "radiusX", "radiusY", "feather"]) {
       await expect(handle(page, id)).toBeVisible();
     }
-    await expect(page.getByRole("button", { name: "Radial 1" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Radial 1", exact: true })).toBeVisible();
 
     const exposure = page.getByRole("slider", { name: "Exposure" });
     await exposure.focus();
@@ -97,7 +97,7 @@ test.describe("gradient and radial masks", () => {
     await page.getByRole("button", { name: "Rename area" }).click();
     await page.keyboard.type("Sky");
     await page.keyboard.press("Enter");
-    await expect(list.getByRole("button", { name: "Sky" })).toBeVisible();
+    await expect(list.getByRole("button", { name: "Sky", exact: true })).toBeVisible();
 
     // Move it up: it becomes the first item.
     await page.getByRole("button", { name: "Move area up" }).click();
@@ -113,7 +113,7 @@ test.describe("gradient and radial masks", () => {
 
     await page.getByRole("button", { name: "Duplicate area" }).click();
     await expect(list.getByRole("listitem")).toHaveCount(3);
-    await expect(list.getByRole("button", { name: "Sky copy" })).toBeVisible();
+    await expect(list.getByRole("button", { name: "Sky copy", exact: true })).toBeVisible();
   });
 
   test("areas survive a reload", async ({ page }) => {
@@ -127,7 +127,7 @@ test.describe("gradient and radial masks", () => {
     await page.getByRole("button", { name: "Local", exact: true }).click();
     const list = page.getByRole("list", { name: "Areas" });
     await expect(list.getByRole("listitem")).toHaveCount(2);
-    await expect(list.getByRole("button", { name: "Radial 1" })).toBeVisible();
-    await expect(list.getByRole("button", { name: "Gradient 2" })).toBeVisible();
+    await expect(list.getByRole("button", { name: "Radial 1", exact: true })).toBeVisible();
+    await expect(list.getByRole("button", { name: "Gradient 2", exact: true })).toBeVisible();
   });
 });
