@@ -113,7 +113,10 @@ test.describe("gradient and radial masks", () => {
 
     await page.getByRole("button", { name: "Duplicate area" }).click();
     await expect(list.getByRole("listitem")).toHaveCount(3);
-    await expect(list.getByRole("button", { name: "Sky copy", exact: true })).toBeVisible();
+    // The copy keeps the original's inverted state, so its name reads "Sky copy (inverted)".
+    const copy = list.getByRole("listitem").filter({ hasText: "Sky copy" });
+    await expect(copy).toHaveCount(1);
+    await expect(copy).toContainText("(inverted)");
   });
 
   test("areas survive a reload", async ({ page }) => {
