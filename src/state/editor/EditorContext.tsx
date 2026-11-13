@@ -14,6 +14,7 @@ import {
   type CropRect,
   type EditState,
   type LocalAdjustments,
+  type MaskShape,
   type MaskStroke,
   type ProcessingState,
   type SourceImage,
@@ -57,7 +58,15 @@ type EditorApi = {
   setError: (e: string | null) => void;
   setShowOriginal: (v: boolean) => void;
   /** Local (masked) areas — outside undo/redo; deleting a layer is how you "undo" it. */
-  addMaskLayer: () => void;
+  /** No shape adds a brush area; a shape adds a linear or radial gradient area. */
+  addMaskLayer: (shape?: MaskShape) => void;
+  duplicateMaskLayer: (id: string) => void;
+  renameMaskLayer: (id: string, name: string) => void;
+  setMaskLayerInverted: (id: string, inverted: boolean) => void;
+  setMaskLayerVisible: (id: string, visible: boolean) => void;
+  moveMaskLayer: (id: string, toIndex: number) => void;
+  /** Live, like painting; bracket a drag with recordMaskHistory() so it is one undo step. */
+  setMaskShape: (id: string, shape: MaskShape) => void;
   deleteMaskLayer: (id: string) => void;
   setActiveMaskLayer: (id: string | null) => void;
   setMaskMode: (mode: "paint" | "erase") => void;
@@ -222,7 +231,15 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setProcessing: (processing) => dispatch({ type: "setProcessing", processing }),
       setError: (error) => dispatch({ type: "setError", error }),
       setShowOriginal: (value) => dispatch({ type: "setShowOriginal", value }),
-      addMaskLayer: () => dispatch({ type: "addMaskLayer" }),
+      addMaskLayer: (shape) =>
+        dispatch(shape ? { type: "addMaskLayer", shape } : { type: "addMaskLayer" }),
+      duplicateMaskLayer: (id) => dispatch({ type: "duplicateMaskLayer", id }),
+      renameMaskLayer: (id, name) => dispatch({ type: "renameMaskLayer", id, name }),
+      setMaskLayerInverted: (id, inverted) =>
+        dispatch({ type: "setMaskLayerInverted", id, inverted }),
+      setMaskLayerVisible: (id, visible) => dispatch({ type: "setMaskLayerVisible", id, visible }),
+      moveMaskLayer: (id, toIndex) => dispatch({ type: "moveMaskLayer", id, toIndex }),
+      setMaskShape: (id, shape) => dispatch({ type: "setMaskShape", id, shape }),
       deleteMaskLayer: (id) => dispatch({ type: "deleteMaskLayer", id }),
       setActiveMaskLayer: (id) => dispatch({ type: "setActiveMaskLayer", id }),
       setMaskMode: (mode) => dispatch({ type: "setMaskMode", mode }),

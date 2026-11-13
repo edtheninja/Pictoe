@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useEditor } from "@/state/editor/EditorContext";
 import { frameOf, outputToSource, radiusToSource } from "@/engine/image/maskSpace";
+import { MaskShapeOverlay } from "./MaskShapeOverlay";
 
 const BRUSH_RADIUS = 0.06; // normalized to min(width, height) of the current output frame
 const MIN_STROKE_SPACING = 0.015; // skip near-duplicate points during a fast drag
@@ -21,6 +22,10 @@ export function MaskOverlay() {
 
   const activeId = state.activeMaskLayerId;
   const mode = state.maskMode;
+  const activeLayer = state.maskLayers.find((l) => l.id === activeId);
+
+  // A gradient layer is edited with handles, not painted on.
+  if (activeLayer?.shape) return <MaskShapeOverlay layer={activeLayer} shape={activeLayer.shape} />;
 
   const paintAt = (clientX: number, clientY: number) => {
     if (!activeId) return;
@@ -100,7 +105,7 @@ export function MaskOverlay() {
     >
       {!activeId && (
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-elevated/90 px-md py-sm text-[13px] text-text-secondary backdrop-blur">
-          Add an area to start painting
+          Add an area to start
         </div>
       )}
     </div>

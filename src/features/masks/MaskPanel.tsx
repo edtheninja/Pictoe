@@ -1,6 +1,26 @@
-import { Brush, Eraser, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import {
+  Brush,
+  ChevronDown,
+  ChevronUp,
+  Circle,
+  Contrast,
+  Copy,
+  Eraser,
+  Eye,
+  EyeOff,
+  Pencil,
+  Spline,
+  Trash2,
+} from "lucide-react";
 import { useEditor } from "@/state/editor/EditorContext";
+import { defaultShape } from "@/engine/image/maskShapes";
+import { frameOf } from "@/engine/image/maskSpace";
 import type { LocalAdjustments } from "@/types/editor";
+import { MaskThumbnail } from "./MaskThumbnail";
+
+const ICON_BUTTON =
+  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-text-muted transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-30";
 
 const PARAMS: { key: keyof LocalAdjustments; label: string }[] = [
   { key: "exposure", label: "Exposure" },
@@ -13,6 +33,12 @@ export function MaskPanel() {
   const {
     state,
     addMaskLayer,
+    duplicateMaskLayer,
+    renameMaskLayer,
+    setMaskLayerInverted,
+    setMaskLayerVisible,
+    moveMaskLayer,
+    setMaskShape,
     deleteMaskLayer,
     setActiveMaskLayer,
     setMaskMode,
@@ -25,58 +51,76 @@ export function MaskPanel() {
   const layers = state.maskLayers;
   const activeId = state.activeMaskLayerId;
   const maskMode = state.maskMode;
+  const activeLayer = layers.find((l) => l.id === activeId);
+  const activeShape = activeLayer?.shape;
+  const frame = state.source ? frameOf(state.source.width, state.source.height, state.edit) : null;
+  const [renamingId, setRenamingId] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-md">
-      <div className="flex items-center justify-between">
-        <p className="text-[11px] uppercase tracking-[0.12em] text-text-muted">Areas</p>
+      <div className="flex flex-col gap-sm">
+        <p className="text-[11px] uppercase tracking-[0.12em] text-text-muted">Add area</p>
 
-        <button
-          type="button"
-          onClick={addMaskLayer}
-          className="flex items-center gap-xs rounded-md border border-border px-sm py-1 text-[12px] text-text-secondary transition-colors duration-150 hover:border-accent hover:text-accent"
-        >
-          <Plus className="h-3 w-3" />
-          Add area
-        </button>
-      </div>
-      <div className="flex flex-col gap-sm rounded-md border border-border p-sm">
-        <label className="flex items-center gap-sm text-[12px]">
-          <span className="w-20 shrink-0 text-text-secondary">Brush size</span>
-
-          <input
-            type="range"
-            min={1}
-            max={100}
-            step={1}
-            value={state.maskBrushSize}
-            onChange={(e) => setMaskBrushSize(Number(e.target.value))}
-            className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
-          />
-
-          <span className="w-8 text-right tabular-nums text-text-muted">{state.maskBrushSize}</span>
-        </label>
-
-        <label className="flex items-center gap-sm text-[12px]">
-          <span className="w-20 shrink-0 text-text-secondary">Softness</span>
-
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={1}
-            value={state.maskBrushSoftness}
-            onChange={(e) => setMaskBrushSoftness(Number(e.target.value))}
-            className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
-          />
-
-          <span className="w-8 text-right tabular-nums text-text-muted">
-            {state.maskBrushSoftness}
-          </span>
-        </label>
+        <div className="grid grid-cols-3 gap-sm">
+          {[
+            { label: "Brush", icon: Brush, add: () => addMaskLayer() },
+            { label: "Linear", icon: Spline, add: () => addMaskLayer(defaultShape("linear")) },
+            { label: "Radial", icon: Circle, add: () => addMaskLayer(defaultShape("radial")) },
+          ].map(({ label, icon: Icon, add }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={add}
+              className="flex items-center justify-center gap-xs rounded-md border border-border px-sm py-1.5 text-[12px] text-text-secondary transition-colors duration-150 hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {activeId && (
+      {!activeShape && (
+        <div className="flex flex-col gap-sm rounded-md border border-border p-sm">
+          <label className="flex items-center gap-sm text-[12px]">
+            <span className="w-20 shrink-0 text-text-secondary">Brush size</span>
+
+            <input
+              type="range"
+              min={1}
+              max={100}
+              step={1}
+              value={state.maskBrushSize}
+              onChange={(e) => setMaskBrushSize(Number(e.target.value))}
+              className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
+            />
+
+            <span className="w-8 text-right tabular-nums text-text-muted">
+              {state.maskBrushSize}
+            </span>
+          </label>
+
+          <label className="flex items-center gap-sm text-[12px]">
+            <span className="w-20 shrink-0 text-text-secondary">Softness</span>
+
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={state.maskBrushSoftness}
+              onChange={(e) => setMaskBrushSoftness(Number(e.target.value))}
+              className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
+            />
+
+            <span className="w-8 text-right tabular-nums text-text-muted">
+              {state.maskBrushSoftness}
+            </span>
+          </label>
+        </div>
+      )}
+
+      {activeId && !activeShape && (
         <div className="flex rounded-md border border-border bg-surface-elevated/40 p-1">
           <button
             type="button"
@@ -108,7 +152,7 @@ export function MaskPanel() {
         </div>
       )}
 
-      {activeId && (
+      {activeId && !activeShape && (
         <p className="text-[11px] leading-relaxed text-text-muted">
           {maskMode === "paint"
             ? "Paint to add this area's effect."
@@ -116,33 +160,115 @@ export function MaskPanel() {
         </p>
       )}
 
+      {activeLayer && activeShape && (
+        <div className="flex flex-col gap-sm">
+          <p className="text-[11px] leading-relaxed text-text-muted">
+            {activeShape.kind === "linear"
+              ? "Drag the two handles on the photo. The effect is full at the solid line and fades to none at the dashed one."
+              : "Drag the handles on the photo to move, resize and rotate. Arrow keys nudge a focused handle."}
+          </p>
+
+          {activeShape.kind === "radial" && (
+            <label className="flex items-center gap-sm text-[12px]">
+              <span className="w-20 shrink-0 text-text-secondary">Feather</span>
+
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(activeShape.feather)}
+                onPointerDown={() => recordMaskHistory()}
+                onChange={(e) =>
+                  setMaskShape(activeLayer.id, { ...activeShape, feather: Number(e.target.value) })
+                }
+                className="h-1.5 w-full flex-1 cursor-pointer appearance-none rounded-full bg-border-strong accent-accent"
+              />
+
+              <span className="w-8 text-right tabular-nums text-text-muted">
+                {Math.round(activeShape.feather)}
+              </span>
+            </label>
+          )}
+        </div>
+      )}
+
       {layers.length === 0 && (
         <p className="text-[12px] text-text-muted">
-          Add an area, then paint on the image to mark where it applies.
+          Add a brush, linear or radial area to choose where your edits apply.
         </p>
       )}
 
-      <div className="flex flex-col gap-sm">
-        {layers.map((layer) => {
+      <ul className="flex flex-col gap-sm" aria-label="Areas">
+        {layers.map((layer, index) => {
           const active = layer.id === activeId;
+          const hidden = layer.visible === false;
+          const renaming = renamingId === layer.id;
+          const empty = !layer.shape && layer.strokes.length === 0;
 
           return (
-            <div
+            <li
               key={layer.id}
               className={`rounded-md border px-sm py-sm transition-colors duration-150 ${
                 active ? "border-accent bg-accent/5" : "border-border"
               }`}
             >
-              <div className="flex items-center justify-between gap-sm">
+              <div className="flex items-center gap-sm">
+                {frame && <MaskThumbnail layer={layer} frame={frame} />}
+
+                {renaming ? (
+                  <input
+                    autoFocus
+                    aria-label={`Rename ${layer.name}`}
+                    defaultValue={layer.name}
+                    maxLength={60}
+                    onFocus={(e) => e.currentTarget.select()}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        renameMaskLayer(layer.id, e.currentTarget.value);
+                        setRenamingId(null);
+                      } else if (e.key === "Escape") {
+                        setRenamingId(null);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      renameMaskLayer(layer.id, e.currentTarget.value);
+                      setRenamingId(null);
+                    }}
+                    className="min-w-0 flex-1 rounded border border-accent bg-surface px-xs py-0.5 text-[13px] text-text-primary outline-none"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setActiveMaskLayer(active ? null : layer.id)}
+                    className={`min-w-0 flex-1 truncate rounded text-left text-[13px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+                      hidden ? "text-text-muted" : "text-text-primary"
+                    }`}
+                  >
+                    {layer.name}
+
+                    {layer.invert && (
+                      <span className="ml-xs text-[11px] text-text-muted">(inverted)</span>
+                    )}
+
+                    {empty && (
+                      <span className="ml-xs text-[11px] text-text-muted">(not painted yet)</span>
+                    )}
+                  </button>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => setActiveMaskLayer(active ? null : layer.id)}
-                  className="min-w-0 flex-1 truncate text-left text-[13px] text-text-primary"
+                  onClick={() => setMaskLayerVisible(layer.id, hidden)}
+                  aria-label={hidden ? `Show ${layer.name}` : `Hide ${layer.name}`}
+                  aria-pressed={!hidden}
+                  className={ICON_BUTTON}
                 >
-                  {layer.name}
-
-                  {layer.strokes.length === 0 && (
-                    <span className="ml-xs text-[11px] text-text-muted">(not painted yet)</span>
+                  {hidden ? (
+                    <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                   )}
                 </button>
 
@@ -150,11 +276,74 @@ export function MaskPanel() {
                   type="button"
                   onClick={() => deleteMaskLayer(layer.id)}
                   aria-label={`Delete ${layer.name}`}
-                  className="text-text-muted transition-colors duration-150 hover:text-danger"
+                  className={`${ICON_BUTTON} hover:!text-danger`}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </div>
+
+              {active && (
+                <div
+                  className="mt-sm flex items-center gap-xs"
+                  role="group"
+                  aria-label={`${layer.name} actions`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setMaskLayerInverted(layer.id, layer.invert !== true)}
+                    aria-pressed={layer.invert === true}
+                    aria-label="Invert area"
+                    title="Invert area"
+                    className={`${ICON_BUTTON} ${layer.invert ? "bg-accent/15 !text-accent" : ""}`}
+                  >
+                    <Contrast className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => duplicateMaskLayer(layer.id)}
+                    aria-label="Duplicate area"
+                    title="Duplicate area"
+                    className={ICON_BUTTON}
+                  >
+                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRenamingId(layer.id)}
+                    aria-label="Rename area"
+                    title="Rename area"
+                    className={ICON_BUTTON}
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  </button>
+
+                  <span className="flex-1" />
+
+                  <button
+                    type="button"
+                    onClick={() => moveMaskLayer(layer.id, index - 1)}
+                    disabled={index === 0}
+                    aria-label="Move area up"
+                    title="Move up (earlier areas are applied first)"
+                    className={ICON_BUTTON}
+                  >
+                    <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => moveMaskLayer(layer.id, index + 1)}
+                    disabled={index === layers.length - 1}
+                    aria-label="Move area down"
+                    title="Move down (later areas are applied on top)"
+                    className={ICON_BUTTON}
+                  >
+                    <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
 
               {active && (
                 <div className="mt-sm flex flex-col gap-sm">
@@ -182,10 +371,10 @@ export function MaskPanel() {
                   ))}
                 </div>
               )}
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }
