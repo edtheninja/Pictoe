@@ -132,9 +132,10 @@ test("brighten a face, cool a sky and tune the greens, all non-destructively and
   await expect(areas.getByRole("button", { name: "Gradient 2", exact: true })).toBeVisible();
 
   await openMixerBand(page, "Green");
-  await expect(slider(page, "Green hue")).toHaveValue("100");
-  await expect(slider(page, "Green saturation")).toHaveValue("100");
-  await expect(slider(page, "Green luminance")).toHaveValue("-100");
+  // The mixer's sliders are Radix sliders (not <input>), which expose their value as aria-valuenow.
+  await expect(slider(page, "Green hue")).toHaveAttribute("aria-valuenow", "100");
+  await expect(slider(page, "Green saturation")).toHaveAttribute("aria-valuenow", "100");
+  await expect(slider(page, "Green luminance")).toHaveAttribute("aria-valuenow", "-100");
 
   // 5. Non-destructive: switching both areas off gives the original face and sky back.
   await tool(page, "Local").click();
