@@ -43,6 +43,11 @@ const SETTINGS: {
   adjustments: Partial<Adjustments>;
   curves?: Partial<CurvesState>;
 }[] = [
+  {
+    // What a local area runs on its scratch canvas (localStageAdjustments): only these two.
+    label: "local area: highlights + shadows",
+    adjustments: { highlights: -40, shadows: 50 },
+  },
   { label: "tonal (4 sliders)", adjustments: TONAL },
   { label: "RGB curve", adjustments: {}, curves: { rgb: S_CURVE } },
   { label: "RGB + luma curves", adjustments: {}, curves: { rgb: S_CURVE, luma: S_CURVE } },

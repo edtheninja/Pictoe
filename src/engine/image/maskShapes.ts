@@ -1,4 +1,10 @@
-import type { LinearMaskShape, MaskLayer, MaskShape, RadialMaskShape } from "@/types/editor";
+import {
+  LOCAL_ADJUSTMENT_DEFS,
+  type LinearMaskShape,
+  type MaskLayer,
+  type MaskShape,
+  type RadialMaskShape,
+} from "@/types/editor";
 import { sourceToOutput, type MaskFrame } from "./maskSpace";
 
 /**
@@ -113,10 +119,13 @@ export function isShapeLayer(layer: Pick<MaskLayer, "shape">): boolean {
   return layer.shape !== undefined;
 }
 
-/** Layers with no effect to render: hidden ones, and brush layers that nothing was painted on
- *  (unless inverted, where "nothing painted" means "everywhere"). */
+/** Layers with no effect to render: hidden ones, brush layers that nothing was painted on
+ *  (unless inverted, where "nothing painted" means "everywhere"), and layers whose sliders are
+ *  all at zero (their scratch copy would be identical to the picture, so drawing it back is
+ *  wasted work: two full-frame canvases per frame for every freshly added or reset area). */
 export function layerHasEffect(layer: MaskLayer): boolean {
   if (layer.visible === false) return false;
+  if (LOCAL_ADJUSTMENT_DEFS.every((d) => layer.adjustments[d.key] === 0)) return false;
   if (layer.shape) return true;
   return layer.strokes.length > 0 || layer.invert === true;
 }

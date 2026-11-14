@@ -219,6 +219,33 @@ describe("layerHasEffect", () => {
     expect(layerHasEffect({ ...base, invert: true })).toBe(true);
   });
 
+  it("is false when every slider is at zero, for any kind of area", () => {
+    const neutral = { ...base, adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS } };
+    const painted = { strokes: [{ x: 0.5, y: 0.5, radius: 0.05 }] };
+    expect(layerHasEffect({ ...neutral, shape: defaultShape("radial") })).toBe(false);
+    expect(layerHasEffect({ ...neutral, shape: defaultShape("linear") })).toBe(false);
+    expect(layerHasEffect({ ...neutral, ...painted })).toBe(false);
+    expect(layerHasEffect({ ...neutral, ...painted, invert: true })).toBe(false);
+  });
+
+  it("is true as soon as any one slider, including a newer one, leaves zero", () => {
+    for (const key of [
+      "exposure",
+      "highlights",
+      "shadows",
+      "tint",
+      "clarity",
+      "sharpness",
+    ] as const) {
+      const layer = {
+        ...base,
+        shape: defaultShape("radial"),
+        adjustments: { ...DEFAULT_LOCAL_ADJUSTMENTS, [key]: 1 },
+      };
+      expect(layerHasEffect(layer)).toBe(true);
+    }
+  });
+
   it("is true for a gradient layer, and false for any hidden layer", () => {
     expect(layerHasEffect({ ...base, shape: defaultShape("radial") })).toBe(true);
     expect(layerHasEffect({ ...base, shape: defaultShape("radial"), visible: false })).toBe(false);

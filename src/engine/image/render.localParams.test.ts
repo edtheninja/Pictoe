@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderImage } from "./render";
+import {
+  createFakeDocument,
+  fakeCanvas,
+  type Call,
+  type FakeDocument,
+} from "./fakeCanvas.testutil";
 import { DEFAULT_EDIT_STATE, DEFAULT_LOCAL_ADJUSTMENTS, type MaskLayer } from "@/types/editor";
 
 /**
@@ -8,47 +14,12 @@ import { DEFAULT_EDIT_STATE, DEFAULT_LOCAL_ADJUSTMENTS, type MaskLayer } from "@
  * colorStage tests); this proves each new slider reaches the right step of the area's chain,
  * and that a slider at zero costs nothing.
  */
-type Call = { name: string; args: unknown[] };
-type FakeCanvas = { width: number; height: number; calls: Call[]; getContext: () => unknown };
-
-function fakeCanvas(): FakeCanvas {
-  const calls: Call[] = [];
-  const ctx = new Proxy({} as Record<string, unknown>, {
-    get:
-      (_t, prop: string) =>
-      (...args: unknown[]) => {
-        calls.push({ name: prop, args });
-        if (prop === "createRadialGradient") return { addColorStop() {} };
-        if (prop === "getImageData") {
-          const w = Number(args[2]);
-          const h = Number(args[3]);
-          const data = new Uint8ClampedArray(w * h * 4);
-          // The one-pixel read is the browser's "does ctx.filter work?" probe: answer yes, so the
-          // area's filter is set as a string instead of being applied pixel by pixel.
-          if (w === 1 && h === 1) data[0] = 255;
-          return { width: w, height: h, data };
-        }
-        return undefined;
-      },
-    set: (_t, prop: string, value: unknown) => {
-      calls.push({ name: `set:${prop}`, args: [value] });
-      return true;
-    },
-  });
-  return { width: 0, height: 0, calls, getContext: () => ctx };
-}
-
-let made: FakeCanvas[] = [];
+let fake: FakeDocument;
 
 beforeEach(() => {
-  made = [];
-  vi.stubGlobal("document", {
-    createElement: () => {
-      const c = fakeCanvas();
-      made.push(c);
-      return c;
-    },
-  });
+  const created = createFakeDocument();
+  fake = created.made;
+  vi.stubGlobal("document", created.document);
   // The first render also creates a one-off probe canvas (and caches the answer); do it here so
   // the baseline below counts the same work as every later render.
   render({});
@@ -65,14 +36,14 @@ const layer = (adjustments: Partial<MaskLayer["adjustments"]>): MaskLayer => ({
 
 /** Everything the render did, after the local layer's scratch canvas was created. */
 function render(adjustments: Partial<MaskLayer["adjustments"]>) {
-  made = [];
+  fake.canvases.length = 0;
   const target = fakeCanvas();
   renderImage({} as CanvasImageSource, 60, 40, DEFAULT_EDIT_STATE, target as never, undefined, [
     layer(adjustments),
   ]);
-  const calls = [...made.flatMap((c) => c.calls), ...target.calls];
+  const calls = [...fake.canvases.flatMap((c) => c.calls), ...target.calls];
   const count = (name: string) => calls.filter((c) => c.name === name).length;
-  return { calls, count, canvases: made.length };
+  return { calls, count, canvases: fake.canvases.length };
 }
 
 let base: ReturnType<typeof render>;
@@ -106,7 +77,7 @@ describe("local areas: the new sliders reach the render", () => {
   });
 
   it("tint adds a soft-light colour layer: magenta one way, green the other", () => {
-    const fills = (calls: { name: string; args: unknown[] }[]) =>
+    const fills = (calls: Call[]) =>
       calls.filter((c) => c.name === "set:fillStyle").map((c) => c.args[0]);
     expect(fills(render({ tint: 60 }).calls)).toContain("#ff3cf0");
     expect(fills(render({ tint: -60 }).calls)).toContain("#54ff3c");
@@ -119,7 +90,7 @@ describe("local areas: the new sliders reach the render", () => {
     const r = render({ clarity: 70 });
     expect(r.count("getImageData")).toBe(base.count("getImageData"));
     expect(r.canvases).toBe(base.canvases);
-    const filters = (calls: { name: string; args: unknown[] }[]) =>
+    const filters = (calls: Call[]) =>
       calls.filter((c) => c.name === "set:filter").map((c) => String(c.args[0]));
     expect(filters(r.calls)).not.toEqual(filters(base.calls));
   });
