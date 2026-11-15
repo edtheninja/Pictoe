@@ -13,6 +13,7 @@ import {
   DEFAULT_CROP,
   DEFAULT_EDIT_STATE,
   DEFAULT_LOCAL_ADJUSTMENTS,
+  healModeOf,
 } from "@/types/editor";
 
 let counter = 0;
@@ -328,6 +329,59 @@ describe("damaged or hand-edited saves", () => {
     });
     expect(edit.healStrokes).toHaveLength(1);
     expect(edit.healStrokes[0]!.softness).toBe(30);
+  });
+
+  describe("heal stroke mode", () => {
+    const base = { x: 0.1, y: 0.2, dx: 0.1, dy: 0.1, radius: 0.05, softness: 10 };
+    const strokes = (...modes: unknown[]) =>
+      must({
+        edit: { healStrokes: modes.map((mode) => (mode === undefined ? base : { ...base, mode })) },
+      }).edit.healStrokes;
+
+    it("leaves a stroke saved before modes without one, so it reads as a clone", () => {
+      const [s] = strokes(undefined);
+      expect(s).toEqual(base);
+      expect("mode" in s!).toBe(false);
+      expect(healModeOf(s!)).toBe("clone");
+    });
+
+    it("keeps a valid mode exactly as saved", () => {
+      const out = strokes("clone", "heal");
+      expect(out.map((s) => s.mode)).toEqual(["clone", "heal"]);
+    });
+
+    it("drops a mode it does not know (from a newer build) but keeps the stroke as a clone", () => {
+      const out = strokes("inpaint", 5, null, true, "HEAL", "");
+      expect(out).toHaveLength(6);
+      for (const s of out) {
+        expect("mode" in s).toBe(false);
+        expect(healModeOf(s)).toBe("clone");
+        expect(s).toEqual(base);
+      }
+    });
+
+    it("keeps the order of mixed strokes, and still drops strokes it cannot repair", () => {
+      const out = must({
+        edit: {
+          healStrokes: [
+            { ...base, x: 0.1, mode: "heal" },
+            { ...base, x: "bad", mode: "heal" },
+            { ...base, x: 0.3 },
+            { ...base, x: 0.4, mode: "clone" },
+          ],
+        },
+      }).edit.healStrokes;
+      expect(out.map((s) => [s.x, healModeOf(s)])).toEqual([
+        [0.1, "heal"],
+        [0.3, "clone"],
+        [0.4, "clone"],
+      ]);
+    });
+
+    it("round-trips a heal stroke from today's build unchanged", () => {
+      const heal = { ...base, mode: "heal" as const };
+      expect(must({ edit: { healStrokes: [heal] } }).edit.healStrokes).toEqual([heal]);
+    });
   });
 
   it("repairs layers: unique ids, default names, only usable strokes, numeric adjustments", () => {

@@ -65,7 +65,22 @@ export type HealStroke = {
   dy: number;
   radius: number;
   softness: number; // 0 hard edge … 100 fully feathered
+  /** Absent means "clone" (every stroke saved before heal mode existed). Read it with healModeOf. */
+  mode?: HealMode;
 };
+
+/**
+ * How a stroke paints. "clone" copies the source pixels as they are. "heal" copies the source's
+ * texture but matches the colour and brightness of the surroundings, so the patch blends in.
+ */
+export type HealMode = "clone" | "heal";
+
+export const HEAL_MODES: readonly HealMode[] = ["clone", "heal"];
+
+/** The mode of a stroke, with the saved-before-modes default applied. */
+export function healModeOf(stroke: Pick<HealStroke, "mode">): HealMode {
+  return stroke.mode ?? "clone";
+}
 
 /** One control point on a tone curve: input level (x) to output level (y), both 0..1. */
 export type CurvePoint = { x: number; y: number };

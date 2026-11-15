@@ -1,11 +1,20 @@
-import type { HealStroke } from "@/types/editor";
+import { healModeOf, type HealMode, type HealStroke } from "@/types/editor";
 
 /**
  * Pure pixel logic for the clone stamp. No DOM: it works on RGBA arrays, so it can be tested
  * exactly. One "dab" paints a soft round patch at (cx, cy) copied from (cx + dx, cy + dy).
  * Everything is in source-image pixels.
  */
-export type Dab = { cx: number; cy: number; dx: number; dy: number; r: number; softness: number };
+export type Dab = {
+  cx: number;
+  cy: number;
+  dx: number;
+  dy: number;
+  r: number;
+  softness: number;
+  /** Carried from the stroke. Until the blend step lands, "heal" is painted exactly like "clone". */
+  mode?: HealMode;
+};
 
 /** A rectangle of pixels at a position in the image, with its RGBA data. */
 export type Patch = { x: number; y: number; w: number; h: number; data: Uint8ClampedArray };
@@ -22,6 +31,7 @@ export function dabFromStroke(s: HealStroke, srcW: number, srcH: number): Dab {
     dy: s.dy * srcH,
     r: s.radius * Math.min(srcW, srcH),
     softness: clamp(s.softness, 0, 100),
+    mode: healModeOf(s),
   };
 }
 

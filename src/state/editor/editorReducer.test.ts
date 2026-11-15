@@ -245,6 +245,15 @@ describe("clone (heal) strokes", () => {
     expect(s.past).toHaveLength(0);
   });
 
+  it("addHealStroke keeps a stroke's mode, and a stroke without one stays without", () => {
+    const withMode = reducer(fresh(), {
+      type: "addHealStroke",
+      stroke: { ...dab(), mode: "heal" },
+    });
+    const without = reducer(withMode, { type: "addHealStroke", stroke: dab(0.5) });
+    expect(without.edit.healStrokes.map((s) => s.mode)).toEqual(["heal", undefined]);
+  });
+
   it("a whole drag is one undo step", () => {
     const base = fresh();
     const painted = [0.1, 0.2, 0.3].reduce(

@@ -40,7 +40,15 @@ describe("dabFromStroke", () => {
       dy: -20,
       r: 10,
       softness: 30,
+      mode: "clone",
     });
+  });
+
+  it("carries the stroke's mode, and reads a stroke with none as a clone", () => {
+    const base = { x: 0, y: 0, dx: 0, dy: 0, radius: 0.1, softness: 0 };
+    expect(dabFromStroke(base, 10, 10).mode).toBe("clone");
+    expect(dabFromStroke({ ...base, mode: "clone" }, 10, 10).mode).toBe("clone");
+    expect(dabFromStroke({ ...base, mode: "heal" }, 10, 10).mode).toBe("heal");
   });
 
   it("clamps softness to 0–100", () => {

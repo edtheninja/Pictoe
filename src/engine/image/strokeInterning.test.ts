@@ -65,4 +65,14 @@ describe("internStrokes", () => {
     expect(result).not.toBe(cached);
     expect(result[0]).not.toBe(cached[0]);
   });
+
+  it("sees a stroke whose mode changed as different, and an unchanged mode as the same", () => {
+    const cached: S[] = [{ x: 1, y: 2, radius: 3, mode: "clone" }];
+    expect(internStrokes(cached, clone(cached))).toBe(cached);
+
+    const changed = internStrokes(cached, [{ x: 1, y: 2, radius: 3, mode: "heal" }]);
+    expect(changed).not.toBe(cached);
+    expect(changed[0]).toEqual({ x: 1, y: 2, radius: 3, mode: "heal" });
+    expect(planStrokeUpdate(cached, changed)).toBe("rebuild");
+  });
 });

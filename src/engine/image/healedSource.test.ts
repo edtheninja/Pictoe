@@ -66,6 +66,24 @@ describe("applyStrokes", () => {
     applyStrokes(surface, [stroke({ x: 5, y: 5 })]);
     expect(Array.from(data)).toEqual(before);
   });
+
+  it("paints a stroke with no mode and one marked clone identically (saves from before modes)", () => {
+    const a = arraySurface(W, W);
+    const b = arraySurface(W, W);
+    applyStrokes(a.surface, [stroke({ softness: 40 })]);
+    applyStrokes(b.surface, [stroke({ softness: 40, mode: "clone" })]);
+    expect(Array.from(b.data)).toEqual(Array.from(a.data));
+  });
+
+  // Temporary: the heal blend arrives in the next M9 step, and this test is then replaced by
+  // one that checks the blend. Until then a heal stroke must not corrupt or skip the edit.
+  it("paints a heal-mode stroke like a clone for now", () => {
+    const a = arraySurface(W, W);
+    const b = arraySurface(W, W);
+    applyStrokes(a.surface, [stroke({ softness: 40 })]);
+    applyStrokes(b.surface, [stroke({ softness: 40, mode: "heal" })]);
+    expect(Array.from(b.data)).toEqual(Array.from(a.data));
+  });
 });
 
 describe("HealedSources", () => {

@@ -8,6 +8,8 @@ import {
   type Adjustments,
   type CropRect,
   type EditState,
+  HEAL_MODES,
+  type HealMode,
   type HealStroke,
   type LocalAdjustments,
   type MaskLayer,
@@ -97,14 +99,19 @@ function normalizeHealStrokes(raw: unknown): HealStroke[] {
     if (!isRecord(item)) continue;
     const { x, y, dx, dy, radius } = item;
     if (![x, y, dx, dy, radius].every(isFiniteNumber) || (radius as number) <= 0) continue;
-    out.push({
+    const stroke: HealStroke = {
       x: x as number,
       y: y as number,
       dx: dx as number,
       dy: dy as number,
       radius: Math.min(radius as number, 2),
       softness: num(item["softness"], 30, 0, 100),
-    });
+    };
+    // Saves from before heal mode have none, and a mode this build doesn't know (from a newer
+    // one) is left off: either way the stroke reads as "clone", which keeps the user's edit.
+    const mode = item["mode"];
+    if (HEAL_MODES.includes(mode as HealMode)) stroke.mode = mode as HealMode;
+    out.push(stroke);
   }
   return out;
 }

@@ -131,6 +131,16 @@ These are small, mostly cheap, and make everything after them safer. Do them bef
 - [x] Bundle a whole drag into a single undo step
 - [x] Persist heal strokes with the session
 
+**Spot healing (added 15 Nov 2026).** The goal above says "spot healing and clone-stamp", but only the clone stamp was built: a stroke copies source pixels as they are, and nothing blends tone or picks a source. These steps add the missing half on the same `HealStroke` model, one verified step at a time:
+
+1. [x] **Data:** a stroke has an optional `mode` (`"clone"` or `"heal"`; absent means clone, so every stroke and saved session from before opens unchanged). `healModeOf()` reads it, `normalizeHealStrokes` keeps a valid mode and leaves off an unknown one (a mode from a newer build reads as clone, so the edit is kept), and the mode reaches the pixel layer through `dabFromStroke`. A heal-mode stroke is painted exactly like a clone until step 2. Nothing in the UI creates heal strokes yet.
+2. [ ] **Blend maths:** a pure, testable function that copies the source's texture but matches the colour and brightness of the area around the destination.
+3. [ ] **Auto source:** for a single tap, search nearby for the best-matching patch, with a bounded search so it cannot be slow.
+4. [ ] **UI:** a Clone / Heal switch in the panel; in Heal mode a tap fixes a spot and a drag paints.
+5. [ ] **Render:** wire heal mode into the healed-source cache and the Worker path, reusing the one-undo-per-drag handling.
+6. [ ] **Tests and profile:** unit tests, a browser test, deliberate breakages, and a per-dab cost measurement.
+7. [ ] **Real-device checks (yours):** Safari, an iPhone/Android touch screen, and two-finger pinch/pan with the Clone tool active.
+
 **Status:** built and unit-tested (clone pixel maths, the cached source, the reducer actions, and that strokes land where the user taps for every crop, rotation and flip). **Verified in headless Chromium (27 Oct 2026, 14 scripted checks):** choose a source, paint, the hint and ring, one undo/redo per drag, persistence across a reload, and the healed spot following a 90° rotation and a flip; it also found that the keyboard shortcuts were not wired up (fixed). **Still to check on real devices:** Safari, an iPhone/Android touch screen, and two-finger pinch/pan while the Clone tool is active.
 
 **Decision already made:** manual heal ships *before* any AI heal. It serves a distinct use case, delivers value immediately, and its data model becomes the foundation for the cloud layer in M11.
