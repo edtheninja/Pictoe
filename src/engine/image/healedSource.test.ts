@@ -75,8 +75,9 @@ describe("applyStrokes", () => {
     expect(Array.from(b.data)).toEqual(Array.from(a.data));
   });
 
-  // Temporary: the heal blend arrives in the next M9 step, and this test is then replaced by
-  // one that checks the blend. Until then a heal stroke must not corrupt or skip the edit.
+  // Temporary: healDab (healBlend.ts) exists but applyStrokes does not call it until M9 step 5,
+  // when this test is replaced by one that checks the blend. Until then a heal stroke must not
+  // corrupt or skip the edit.
   it("paints a heal-mode stroke like a clone for now", () => {
     const a = arraySurface(W, W);
     const b = arraySurface(W, W);
