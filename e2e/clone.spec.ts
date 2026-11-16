@@ -8,6 +8,7 @@ import {
   redFraction,
   roughly,
   screenPoint,
+  settledRedFraction,
 } from "./helpers";
 
 const HINT = "Tap a clean area to copy from";
@@ -40,7 +41,7 @@ test.describe("clone tool", () => {
     const before = await redFraction(page);
     await paintOverBlemish(page);
     await expect.poll(async () => (await redFraction(page)) < before * 0.9).toBe(true);
-    const painted = await redFraction(page);
+    const painted = await settledRedFraction(page);
 
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(async () => roughly(await redFraction(page), before)).toBe(true);
@@ -53,7 +54,7 @@ test.describe("clone tool", () => {
     await openTestPhoto(page);
     await paintOverBlemish(page);
     await expect.poll(async () => isGreen(await pixelAt(page, BLEMISH))).toBe(true);
-    const painted = await redFraction(page);
+    const painted = await settledRedFraction(page);
     await page.waitForTimeout(1500); // the session autosaves after a short pause
 
     await page.reload();

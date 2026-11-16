@@ -66,6 +66,25 @@ export function redFraction(page: Page) {
   }, IMAGE);
 }
 
+/**
+ * The red coverage once the preview has stopped changing. A drag paints dab by dab and the
+ * preview redraws behind it, so a reading taken the moment the first pixel turns green can be
+ * mid-render; compare readings 300 ms apart until two agree, then return that one.
+ */
+export async function settledRedFraction(page: Page) {
+  let last = await redFraction(page);
+  await expect
+    .poll(async () => {
+      await page.waitForTimeout(300);
+      const now = await redFraction(page);
+      const moved = Math.abs(now - last);
+      last = now;
+      return moved;
+    })
+    .toBeLessThan(1e-6);
+  return last;
+}
+
 export const redPixels = async (page: Page) => Math.round((await redFraction(page)) * 800 * 600);
 
 export const isGreen = ([r = 0, g = 0, b = 0]: number[]) => g > 150 && r < 120 && b < 130;
