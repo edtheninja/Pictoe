@@ -67,18 +67,20 @@ test.describe("clone tool", () => {
     await openTestPhoto(page);
     await paintOverBlemish(page);
     await expect.poll(async () => isGreen(await pixelAt(page, BLEMISH))).toBe(true);
-    const fraction = await redFraction(page);
+    // Settled, not the first reading: the drag is still being redrawn when the first pixel turns green.
+    const fraction = await settledRedFraction(page);
 
     await page.getByRole("button", { name: "Crop" }).click();
     await page.getByRole("button", { name: "Rotate right" }).click();
     // 90° clockwise sends (x, y) to (1 − y, x).
     const rotated = { x: 1 - BLEMISH.y, y: BLEMISH.x };
     await expect.poll(async () => isGreen(await pixelAt(page, rotated))).toBe(true);
-    expect(roughly(await redFraction(page), fraction)).toBe(true);
+    // The canvas redraws at a new size after a rotation; poll until the coverage matches again.
+    await expect.poll(async () => roughly(await redFraction(page), fraction)).toBe(true);
 
     await page.getByRole("button", { name: "Flip horizontally" }).click();
     const flipped = { x: 1 - rotated.x, y: rotated.y };
     await expect.poll(async () => isGreen(await pixelAt(page, flipped))).toBe(true);
-    expect(roughly(await redFraction(page), fraction)).toBe(true);
+    await expect.poll(async () => roughly(await redFraction(page), fraction)).toBe(true);
   });
 });
