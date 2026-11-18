@@ -1,6 +1,7 @@
 import type { HealStroke } from "@/types/editor";
 import { createCanvas, get2dContext, type AnyCanvas } from "./canvasFactory";
-import { cloneDab, dabFromStroke, dabRects } from "./cloneStamp";
+import { dabFromStroke, dabRects } from "./cloneStamp";
+import { paintDab } from "./healBlend";
 import { planStrokeUpdate } from "./incremental";
 
 /** Reading and writing rectangles of pixels, whatever holds them (a canvas, or an array in tests). */
@@ -11,7 +12,10 @@ export type Surface = {
   write(data: Uint8ClampedArray, x: number, y: number, w: number, h: number): void;
 };
 
-/** Applies clone strokes to a surface, in order. Each dab reads both areas before writing. */
+/**
+ * Applies clone and heal strokes to a surface, in order. Each dab reads both areas before writing
+ * (for a heal dab, the areas include the ring it measures around the target and the source).
+ */
 export function applyStrokes(surface: Surface, strokes: readonly HealStroke[]) {
   for (const stroke of strokes) {
     const dab = dabFromStroke(stroke, surface.width, surface.height);
@@ -26,7 +30,7 @@ export function applyStrokes(surface: Surface, strokes: readonly HealStroke[]) {
       ...rects.dst,
       data: surface.read(rects.dst.x, rects.dst.y, rects.dst.w, rects.dst.h),
     };
-    cloneDab(src, dst, dab, surface.width, surface.height);
+    paintDab(src, dst, dab, surface.width, surface.height);
     surface.write(dst.data, dst.x, dst.y, dst.w, dst.h);
   }
 }

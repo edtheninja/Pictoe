@@ -10,6 +10,7 @@ import {
   identityCurves,
   type AdjustmentKey,
   type EditState,
+  type HealMode,
   type HealStroke,
   type ImageAnalysis,
   type LocalAdjustments,
@@ -43,6 +44,8 @@ type State = {
   maskBrushSoftness: number;
   healBrushSize: number;
   healBrushSoftness: number;
+  /** Whether new strokes copy as they are (clone) or blend into their surroundings (heal). */
+  healMode: HealMode;
   /** Where the clone tool copies from, as 0–1 across the source image. Null until chosen. */
   healSource: { x: number; y: number } | null;
   /** Fixed once painting starts so later strokes keep the same relationship to the source. */
@@ -74,6 +77,7 @@ const initialState: State = {
   maskBrushSoftness: 30,
   healBrushSize: 40,
   healBrushSoftness: 30,
+  healMode: "clone",
   healSource: null,
   healOffset: null,
 };
@@ -121,6 +125,7 @@ type Action =
   | { type: "addHealStroke"; stroke: HealStroke }
   | { type: "setHealBrushSize"; value: number }
   | { type: "setHealBrushSoftness"; value: number }
+  | { type: "setHealMode"; mode: HealMode }
   | { type: "setHealSource"; source: { x: number; y: number } | null }
   | { type: "setHealOffset"; offset: { dx: number; dy: number } | null };
 
@@ -267,6 +272,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, healBrushSize: action.value };
     case "setHealBrushSoftness":
       return { ...state, healBrushSoftness: action.value };
+    case "setHealMode":
+      return state.healMode === action.mode ? state : { ...state, healMode: action.mode };
     // Choosing a new source starts over, so the old offset no longer applies.
     case "setHealSource":
       return { ...state, healSource: action.source, healOffset: null };

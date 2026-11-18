@@ -254,6 +254,27 @@ describe("clone (heal) strokes", () => {
     expect(without.edit.healStrokes.map((s) => s.mode)).toEqual(["heal", undefined]);
   });
 
+  it("starts in clone mode, and setHealMode switches between clone and heal", () => {
+    expect(fresh().healMode).toBe("clone");
+    const heal = reducer(fresh(), { type: "setHealMode", mode: "heal" });
+    expect(heal.healMode).toBe("heal");
+    expect(reducer(heal, { type: "setHealMode", mode: "clone" }).healMode).toBe("clone");
+  });
+
+  it("switching mode does not touch the edit, its history, or the chosen clone source", () => {
+    const withSource = reducer(fresh(), { type: "setHealSource", source: { x: 0.2, y: 0.3 } });
+    const stroked = reducer(withSource, { type: "addHealStroke", stroke: dab() });
+    const switched = reducer(stroked, { type: "setHealMode", mode: "heal" });
+    expect(switched.edit).toBe(stroked.edit);
+    expect(switched.past).toBe(stroked.past);
+    expect(switched.healSource).toEqual({ x: 0.2, y: 0.3 });
+  });
+
+  it("setting the mode it already has returns the same state", () => {
+    const s = fresh();
+    expect(reducer(s, { type: "setHealMode", mode: "clone" })).toBe(s);
+  });
+
   it("a whole drag is one undo step", () => {
     const base = fresh();
     const painted = [0.1, 0.2, 0.3].reduce(

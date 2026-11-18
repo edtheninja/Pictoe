@@ -74,16 +74,98 @@ describe("applyStrokes", () => {
     applyStrokes(b.surface, [stroke({ softness: 40, mode: "clone" })]);
     expect(Array.from(b.data)).toEqual(Array.from(a.data));
   });
+});
 
-  // Temporary: healDab (healBlend.ts) exists but applyStrokes does not call it until M9 step 5,
-  // when this test is replaced by one that checks the blend. Until then a heal stroke must not
-  // corrupt or skip the edit.
-  it("paints a heal-mode stroke like a clone for now", () => {
-    const a = arraySurface(W, W);
-    const b = arraySurface(W, W);
-    applyStrokes(a.surface, [stroke({ softness: 40 })]);
-    applyStrokes(b.surface, [stroke({ softness: 40, mode: "heal" })]);
-    expect(Array.from(b.data)).toEqual(Array.from(a.data));
+describe("applyStrokes with heal strokes", () => {
+  // A 60 x 60 picture: grey 100 on the left (with a bright blemish at (10, 10)), grey 130 on the
+  // right. A stroke at the blemish copying from 30 px to the right lands on the brighter side.
+  const N = 60;
+  const scene = (x: number, y: number) => {
+    if (Math.hypot(x + 0.5 - 10.5, y + 0.5 - 10.5) < 2) return [220, 220, 220, 255];
+    return x < 30 ? [100, 100, 100, 255] : [130, 130, 130, 255];
+  };
+  const healStroke = (over: Partial<HealStroke> = {}): HealStroke => ({
+    x: 10.5 / N,
+    y: 10.5 / N,
+    dx: 30 / N,
+    dy: 0,
+    radius: 4 / N,
+    softness: 0,
+    mode: "heal",
+    ...over,
+  });
+  const run = (strokes: HealStroke[]) => {
+    const s = arraySurface(N, N, scene);
+    applyStrokes(s.surface, strokes);
+    return s.data;
+  };
+
+  it("a heal stroke ends at the target's brightness where a clone leaves the source's", () => {
+    const healed = run([healStroke()]);
+    const cloned = run([healStroke({ mode: "clone" })]);
+    expect(at(healed, N, 10, 10)[0]).toBeCloseTo(100, 0);
+    expect(at(cloned, N, 10, 10)[0]).toBe(130);
+  });
+
+  it("leaves everything outside the dab untouched, ring included", () => {
+    const original = arraySurface(N, N, scene).data;
+    const healed = run([healStroke()]);
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        if (Math.hypot(x + 0.5 - 10.5, y + 0.5 - 10.5) >= 4) {
+          expect(at(healed, N, x, y)).toEqual(at(original, N, x, y));
+        }
+      }
+  });
+
+  it("a drag of overlapping heal dabs heals along the whole path", () => {
+    const drag = [10.5, 12.5, 14.5, 16.5, 18.5].map((x) => healStroke({ x: x / N }));
+    const healed = run(drag);
+    for (const x of [10, 12, 14, 16, 18]) expect(at(healed, N, x, 10)[0]).toBeCloseTo(100, 0);
+  });
+
+  it("mixes modes in order: a clone stroke and a heal stroke each do their own job", () => {
+    const strokes = [
+      healStroke({ mode: "clone", x: 10.5 / N, y: 10.5 / N }),
+      healStroke({ x: 10.5 / N, y: 40.5 / N, dx: 0.25 }),
+    ];
+    const out = run(strokes);
+    expect(at(out, N, 10, 10)[0]).toBe(130); // clone: source brightness
+  });
+
+  it("the cache's append path gives the same picture as painting every stroke from scratch", () => {
+    const make = () =>
+      new HealedSources<object, object>((_src, w, h) => {
+        const s = arraySurface(w, h, scene);
+        return { canvas: s.data, surface: s.surface };
+      });
+    const first = healStroke();
+    const second = healStroke({ x: 14.5 / N });
+    const third = healStroke({ x: 18.5 / N, mode: "clone" });
+
+    const incremental = make();
+    const src = {};
+    incremental.get(src, N, N, [first]);
+    incremental.get(src, N, N, [first, second]);
+    const viaAppend = incremental.get(src, N, N, [first, second, third]) as Uint8ClampedArray;
+
+    const viaRebuild = make().get({}, N, N, [first, second, third]) as Uint8ClampedArray;
+    expect(Array.from(viaAppend)).toEqual(Array.from(viaRebuild));
+  });
+
+  it("a heal dab still costs two reads (source area and target area), like a clone", () => {
+    const made: ReturnType<typeof arraySurface>[] = [];
+    const cache = new HealedSources<object, object>((_s, w, h) => {
+      const s = arraySurface(w, h, scene);
+      made.push(s);
+      return { canvas: s.data, surface: s.surface };
+    });
+    const src = {};
+    const a = healStroke();
+    cache.get(src, N, N, [a]);
+    const before = made[0]!.reads();
+    cache.get(src, N, N, [a, healStroke({ x: 14.5 / N })]);
+    expect(made[0]!.reads() - before).toBe(2);
   });
 });
 

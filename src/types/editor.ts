@@ -82,6 +82,16 @@ export function healModeOf(stroke: Pick<HealStroke, "mode">): HealMode {
   return stroke.mode ?? "clone";
 }
 
+/** What to call a change to the stroke list in the history: the mode of the latest stroke involved. */
+export function healChangeLabel(
+  prev: readonly Pick<HealStroke, "mode">[],
+  next: readonly Pick<HealStroke, "mode">[],
+): "Heal" | "Clone" {
+  const longer = next.length >= prev.length ? next : prev;
+  const last = longer[longer.length - 1];
+  return last && healModeOf(last) === "heal" ? "Heal" : "Clone";
+}
+
 /** One control point on a tone curve: input level (x) to output level (y), both 0..1. */
 export type CurvePoint = { x: number; y: number };
 

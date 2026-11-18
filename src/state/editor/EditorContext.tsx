@@ -20,6 +20,7 @@ import {
   type SourceImage,
   type ToolId,
   type Viewport,
+  type HealMode,
   type HealStroke,
 } from "@/types/editor";
 import { editorInitialState, editorReducer, type EditorState } from "./editorReducer";
@@ -79,6 +80,7 @@ type EditorApi = {
   addHealStroke: (stroke: HealStroke) => void;
   setHealBrushSize: (value: number) => void;
   setHealBrushSoftness: (value: number) => void;
+  setHealMode: (mode: HealMode) => void;
   setHealSource: (source: { x: number; y: number } | null) => void;
   setHealOffset: (offset: { dx: number; dy: number } | null) => void;
 };
@@ -252,6 +254,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       addHealStroke: (stroke) => dispatch({ type: "addHealStroke", stroke }),
       setHealBrushSize: (value) => dispatch({ type: "setHealBrushSize", value }),
       setHealBrushSoftness: (value) => dispatch({ type: "setHealBrushSoftness", value }),
+      setHealMode: (mode) => dispatch({ type: "setHealMode", mode }),
       setHealSource: (source) => dispatch({ type: "setHealSource", source }),
       setHealOffset: (offset) => dispatch({ type: "setHealOffset", offset }),
     }),

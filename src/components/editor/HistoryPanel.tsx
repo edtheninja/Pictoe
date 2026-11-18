@@ -2,7 +2,12 @@ import { useState } from "react";
 import { History as HistoryIcon, Check } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useEditor } from "@/state/editor/EditorContext";
-import { ADJUSTMENT_DEFS, type EditState, type AdjustmentKey } from "@/types/editor";
+import {
+  ADJUSTMENT_DEFS,
+  healChangeLabel,
+  type EditState,
+  type AdjustmentKey,
+} from "@/types/editor";
 
 function summarizeChange(prev: EditState, next: EditState): string {
   if (
@@ -14,7 +19,7 @@ function summarizeChange(prev: EditState, next: EditState): string {
   }
 
   if (prev.healStrokes?.length !== next.healStrokes?.length) {
-    return "Clone";
+    return healChangeLabel(prev.healStrokes ?? [], next.healStrokes ?? []);
   }
 
   const curvesChanged = JSON.stringify(prev.curves) !== JSON.stringify(next.curves);

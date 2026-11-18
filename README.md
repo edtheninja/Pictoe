@@ -18,7 +18,7 @@ The idea behind it is **progressive power**: complexity is revealed when you nee
 - **Per-colour saturation** for red, orange, yellow, green, blue and purple, so you can lift the greens without touching skin tones.
 - **Crop** with aspect-ratio presets, 90° rotation and horizontal flip.
 - **Local areas ("Local" tool).** Paint a region with a brush, then give that area its own exposure, contrast, saturation and temperature, with highlights, shadows, tint, clarity and sharpness behind "More controls". Stack as many areas as you like. The brush has adjustable size and softness, plus an eraser. Areas have their own undo/redo and are saved with your session.
-- **Clone tool.** Pick a clean area as the source, then paint over a blemish. Every stroke is saved as data, so a whole drag is one undo step and the strokes follow your crop, rotation and flip.
+- **Heal and Clone.** In Heal mode, tap a spot or paint over a blemish and Pictoe finds a clean place nearby to copy from and blends the patch into its surroundings. In Clone mode you pick the source yourself and the pixels are copied as they are. Every stroke is saved as data, so a whole drag is one undo step and the strokes follow your crop, rotation and flip.
 - **Presets.** Five built-in looks (Warm Film, Moody B&W, Vivid Pop, Cool Blue, Soft Portrait) plus your own, saved locally.
 
 ### Control and safety
@@ -150,7 +150,7 @@ The full plan, with effort and dependencies, is in [ROADMAP.md](./ROADMAP.md). T
 | **Stabilise** | Mostly done: docs refreshed, first tests added, masks cached, masks now follow crop/rotation/flip. Remaining: confirming the recent mask, Safari and touch work on real devices |
 | **M7 · Quality & reach** | Test suite and CI, cross-browser verification, pinch-zoom and touch gestures, move pixel work off the main thread, accessibility pass |
 | **M8 · Local editing depth** | Gradient and radial masks, mask management (rename, duplicate, reorder, invert), more per-area controls, full HSL, curves, colour grading, accurate tonal controls |
-| **M9 · Heal** | Clone-stamp built and unit-tested, stored as non-destructive strokes. Remaining: confirm in browsers and on a touch device. Spot-heal comes with the cloud engine (M11) |
+| **M9 · Heal** | Clone-stamp and local spot-heal (automatic source, blended into the surroundings) built and unit-tested, stored as non-destructive strokes. Remaining: confirm the new Heal mode in browsers and on a touch device. Content-aware fill comes with the cloud engine (M11) |
 | **M10 · Workflow & export** | Resolution scaling, filename and metadata options, copy edits between photos, batch apply and export, preset import/export, multi-image library |
 | **M11 · Cloud AI** | Object removal, generative expansion, sky and background replacement, subject isolation, AI-assisted heal, LLM-backed intent. All **suggest → preview → approve** |
 | **M12 · Ship** | Hosting, PWA/offline, privacy-friendly analytics, docs site |

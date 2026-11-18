@@ -19,7 +19,7 @@ const TOOLS: { id: ToolId; label: string; icon: React.ComponentType<{ className?
   { id: "curves", label: "Curves", icon: Spline },
   { id: "crop", label: "Crop", icon: Crop },
   { id: "mask", label: "Local", icon: Brush },
-  { id: "heal", label: "Clone", icon: Stamp },
+  { id: "heal", label: "Heal", icon: Stamp },
   { id: "intent", label: "Intent", icon: Sparkles },
   { id: "presets", label: "Presets", icon: Palette },
 ];

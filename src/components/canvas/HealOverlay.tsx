@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor } from "@/state/editor/EditorContext";
 import {
   frameOf,
@@ -7,6 +7,11 @@ import {
   radiusToSource,
   sourceToOutput,
 } from "@/engine/image/maskSpace";
+import { autoSourceFor } from "@/engine/image/healTap";
+import { readSourceWindow } from "@/engine/image/sourcePixels";
+
+/** How long the "no source found" notice stays up. */
+const NOTICE_MS = 4000;
 
 /** A new dab every quarter of a brush radius keeps strokes smooth without piling up dabs. */
 const SPACING = 0.25;
@@ -14,10 +19,18 @@ const SPACING = 0.25;
 type Point = { x: number; y: number };
 
 /**
- * The clone tool's canvas layer. First tap picks where to copy from; after that, dragging paints
- * a copy of that area over the spot under the brush. Strokes are stored relative to the source
- * image (like masks), and one drag is one undo step. A second finger means pinch-to-zoom, so it
- * stops painting.
+ * The clone and heal tool's canvas layer.
+ *
+ * Clone: the first tap picks where to copy from; after that, dragging paints a copy of that area
+ * over the spot under the brush.
+ *
+ * Heal: no source to choose. Pressing down looks for the best nearby place to copy from (see
+ * autoSource.ts) and paints a heal dab there; dragging carries on with the same source, so a tap
+ * fixes a spot and a drag paints a longer blemish. If nothing suitable is nearby it says so and
+ * paints nothing.
+ *
+ * Strokes are stored relative to the source image (like masks), and one drag, or one tap, is one
+ * undo step. A second finger means pinch-to-zoom, so it stops painting.
  */
 export function HealOverlay() {
   const { state, addHealStroke, setHealSource, setHealOffset, beginInteraction, endInteraction } =
@@ -28,6 +41,13 @@ export function HealOverlay() {
   const lastDab = useRef<Point | null>(null);
   const offsetRef = useRef<{ dx: number; dy: number } | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null); // in the visible frame, 0–1
+  const [noSource, setNoSource] = useState(false);
+
+  useEffect(() => {
+    if (!noSource) return;
+    const timer = setTimeout(() => setNoSource(false), NOTICE_MS);
+    return () => clearTimeout(timer);
+  }, [noSource]);
 
   const source = state.source;
   if (!source) return null;
@@ -36,6 +56,7 @@ export function HealOverlay() {
   const visible = frameOutputSize(frame);
   const brushRadius = radiusToSource(state.healBrushSize / 1000, frame); // fraction of source's shorter side
   const brushPx = brushRadius * Math.min(source.width, source.height);
+  const healing = state.healMode === "heal";
 
   const locate = (clientX: number, clientY: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -62,6 +83,7 @@ export function HealOverlay() {
       dy: offset.dy,
       radius: brushRadius,
       softness: state.healBrushSoftness,
+      ...(healing ? { mode: "heal" as const } : {}),
     });
   };
 
@@ -72,11 +94,12 @@ export function HealOverlay() {
   };
 
   // Where the brush is copying from right now, shown as a ring that follows the cursor.
+  // (When healing, the ring just shows the brush under the cursor: the source is found on press.)
   const offset = state.healOffset;
   const hover = cursor ? outputToSource(cursor, frame) : null;
   const copyingFrom: Point | null =
     hover && offset ? { x: hover.x + offset.dx, y: hover.y + offset.dy } : state.healSource;
-  const ringAt = copyingFrom ? sourceToOutput(copyingFrom, frame) : null;
+  const ringAt = healing ? cursor : copyingFrom ? sourceToOutput(copyingFrom, frame) : null;
   const showRing = ringAt && ringAt.x >= 0 && ringAt.x <= 1 && ringAt.y >= 0 && ringAt.y <= 1;
   const shorter = Math.min(visible.width, visible.height);
   const ringW = ((2 * (state.healBrushSize / 1000) * shorter) / visible.width) * 100;
@@ -95,6 +118,28 @@ export function HealOverlay() {
         }
         const at = locate(e.clientX, e.clientY);
         if (!at) return;
+
+        if (healing) {
+          const found = autoSourceFor(
+            (rect) => readSourceWindow(source.element, rect),
+            source.width,
+            source.height,
+            at.src,
+            brushRadius,
+          );
+          if (!found) {
+            setNoSource(true);
+            return;
+          }
+          setNoSource(false);
+          offsetRef.current = { dx: found.dx, dy: found.dy };
+          (e.target as HTMLElement).setPointerCapture(e.pointerId);
+          paintingPointer.current = e.pointerId;
+          lastDab.current = null;
+          beginInteraction();
+          paintAt(at.src);
+          return;
+        }
 
         // The first tap only chooses where to copy from.
         if (!state.healSource) {
@@ -141,9 +186,18 @@ export function HealOverlay() {
           }}
         />
       )}
-      {!state.healSource && (
+      {!healing && !state.healSource && (
         <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface-elevated/90 px-md py-sm text-[13px] text-text-secondary backdrop-blur">
           Tap a clean area to copy from
+        </div>
+      )}
+      {noSource && (
+        <div
+          role="status"
+          className="pointer-events-none absolute left-1/2 top-4 w-[min(90%,22rem)] -translate-x-1/2 rounded-md bg-surface-elevated/95 px-md py-sm text-center text-[13px] text-text-secondary shadow-lg backdrop-blur"
+        >
+          Couldn&apos;t find a good place to copy from near here. Try a smaller brush, or switch to
+          Clone and choose a source yourself.
         </div>
       )}
     </div>

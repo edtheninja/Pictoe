@@ -15,7 +15,7 @@ const HINT = "Tap a clean area to copy from";
 
 /** Choose the green square as the source, then drag across the red blemish. */
 async function paintOverBlemish(page: Page) {
-  await page.getByRole("button", { name: "Clone" }).click();
+  await page.getByRole("button", { name: "Heal", exact: true }).click();
   await expect(page.getByText(HINT)).toBeVisible();
   const src = await screenPoint(page, SOURCE);
   await page.mouse.click(src.x, src.y);

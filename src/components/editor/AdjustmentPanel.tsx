@@ -14,7 +14,7 @@ const TITLES: Record<string, string> = {
   detail: "Detail",
   curves: "Curves",
   crop: "Crop & rotate",
-  heal: "Clone",
+  heal: "Heal",
   intent: "Intent",
   presets: "Presets",
   mask: "Local areas",
