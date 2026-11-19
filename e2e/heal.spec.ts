@@ -57,15 +57,20 @@ test.describe("heal mode", () => {
 
     await page.getByRole("button", { name: "Heal", exact: true }).click();
     await page.getByRole("radio", { name: "Heal", exact: true }).click();
+    // A brush of radius 42 px (a bit wider than the 40 px circle). With a soft edge only the inner
+    // 70% is replaced outright, so a smaller brush leaves much of the red partly blended in.
+    await page.getByRole("slider", { name: "Brush size" }).fill("70");
+
+    // Start in the middle of the blemish and drag across it, so no dab's ring sits on unhealed red.
     const at = await screenPoint(page, BLEMISH);
-    await page.mouse.move(at.x - 28, at.y);
+    await page.mouse.move(at.x, at.y);
     await page.mouse.down();
-    for (let dx = -28; dx <= 28; dx += 4) await page.mouse.move(at.x + dx, at.y);
+    for (let dx = 4; dx <= 24; dx += 4) await page.mouse.move(at.x + dx, at.y);
     await page.mouse.up();
 
-    // The default brush covers a band through the circle, so a good part of the red is gone.
     await expect.poll(async () => await redFraction(page)).toBeLessThan(before * 0.5);
 
+    // The whole drag, many dabs, is one undo step.
     await page.keyboard.press("ControlOrMeta+z");
     await expect.poll(async () => await redFraction(page)).toBeGreaterThan(before * 0.9);
   });
