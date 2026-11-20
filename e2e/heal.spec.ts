@@ -75,6 +75,30 @@ test.describe("heal mode", () => {
     await expect.poll(async () => await redFraction(page)).toBeGreaterThan(before * 0.9);
   });
 
+  test("a quick swipe leaves no gaps: one wide jump between pointer reports still heals the path", async ({
+    page,
+  }) => {
+    await openTestPhoto(page);
+    const before = await redFraction(page);
+    await page.getByRole("button", { name: "Heal", exact: true }).click();
+    await page.getByRole("radio", { name: "Heal", exact: true }).click();
+
+    // The default brush is 24 px in radius. The pointer goes down 60 px left of the circle's
+    // centre and jumps to 60 px right of it in ONE move, 120 px apart: with a dab only at each
+    // report, the circle (40 px in radius) would be untouched in the middle.
+    const at = await screenPoint(page, BLEMISH);
+    await page.mouse.move(at.x - 60, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x + 60, at.y); // one pointer move, a single event
+    await page.mouse.up();
+
+    // The band through the middle is healed, so a good part of the red is gone (a quarter at least).
+    await expect.poll(async () => await redFraction(page)).toBeLessThan(before * 0.75);
+    // ...and the swipe is one undo step.
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => await redFraction(page)).toBeGreaterThan(before * 0.9);
+  });
+
   test("says so, and paints nothing, when there is nowhere good to copy from", async ({ page }) => {
     await openTestPhoto(page);
     const before = await settledRedFraction(page);

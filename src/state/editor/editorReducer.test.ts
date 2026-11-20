@@ -275,6 +275,27 @@ describe("clone (heal) strokes", () => {
     expect(reducer(s, { type: "setHealMode", mode: "clone" })).toBe(s);
   });
 
+  it("addHealStrokes adds several dabs in order as one state change, and none changes nothing", () => {
+    const s = fresh();
+    const out = reducer(s, { type: "addHealStrokes", strokes: [dab(0.1), dab(0.2), dab(0.3)] });
+    expect(out.edit.healStrokes.map((d) => d.x)).toEqual([0.1, 0.2, 0.3]);
+    expect(reducer(s, { type: "addHealStrokes", strokes: [] })).toBe(s);
+
+    // After one already there, they go on the end.
+    const after = reducer(out, { type: "addHealStrokes", strokes: [dab(0.4)] });
+    expect(after.edit.healStrokes.map((d) => d.x)).toEqual([0.1, 0.2, 0.3, 0.4]);
+  });
+
+  it("a whole quick swipe of batched dabs is still one undo step", () => {
+    const base = fresh();
+    let s = reducer(base, { type: "addHealStrokes", strokes: [dab(0.1), dab(0.2)] });
+    s = reducer(s, { type: "addHealStrokes", strokes: [dab(0.3), dab(0.4), dab(0.5)] });
+    s = reducer(s, { type: "commit", snapshot: base.edit });
+    expect(s.edit.healStrokes).toHaveLength(5);
+    expect(s.past).toHaveLength(1);
+    expect(reducer(s, { type: "undo" }).edit.healStrokes).toHaveLength(0);
+  });
+
   it("a whole drag is one undo step", () => {
     const base = fresh();
     const painted = [0.1, 0.2, 0.3].reduce(

@@ -78,6 +78,7 @@ type EditorApi = {
   setMaskBrushSoftness: (value: number) => void;
   /** Clone tool. addHealStroke is live; bracket a drag with beginInteraction/endInteraction. */
   addHealStroke: (stroke: HealStroke) => void;
+  addHealStrokes: (strokes: HealStroke[]) => void;
   setHealBrushSize: (value: number) => void;
   setHealBrushSoftness: (value: number) => void;
   setHealMode: (mode: HealMode) => void;
@@ -252,6 +253,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setMaskBrushSize: (value) => dispatch({ type: "setMaskBrushSize", value }),
       setMaskBrushSoftness: (value) => dispatch({ type: "setMaskBrushSoftness", value }),
       addHealStroke: (stroke) => dispatch({ type: "addHealStroke", stroke }),
+      addHealStrokes: (strokes) => dispatch({ type: "addHealStrokes", strokes }),
       setHealBrushSize: (value) => dispatch({ type: "setHealBrushSize", value }),
       setHealBrushSoftness: (value) => dispatch({ type: "setHealBrushSoftness", value }),
       setHealMode: (mode) => dispatch({ type: "setHealMode", mode }),

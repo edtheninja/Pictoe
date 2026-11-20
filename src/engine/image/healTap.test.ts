@@ -3,6 +3,7 @@ import { autoSourceWindow, findAutoSource } from "./autoSource";
 import { autoSourceFor, type ReadPixels } from "./healTap";
 import type { Rect } from "./cloneStamp";
 import { applyStrokes, type Surface } from "./healedSource";
+import { dabsAlong } from "./strokePath";
 import type { HealStroke } from "@/types/editor";
 
 /** A picture as an array, with a reader that records every rectangle asked for. */
@@ -149,5 +150,159 @@ describe("a tap, end to end (search, stroke, render), on a non-square photo", ()
         if (inBlemish(x, y))
           worst = Math.max(worst, Math.abs(data[(y * w + x) * 4]! - ramp(x + 0.5, y + 0.5)));
     expect(worst).toBeLessThan(1.5);
+  });
+});
+
+describe("a drag, end to end: scratches, wires and quick swipes", () => {
+  const w = 400;
+  const h = 300;
+  const truth = (x: number, y: number) => 60 + 0.3 * x + 0.1 * y;
+
+  /** A gradient photo with a bright horizontal bar; returns the pixels, a surface and a reader. */
+  function scene(halfHeight: number, halfLength: number) {
+    const onBar = (x: number, y: number) =>
+      Math.abs(x + 0.5 - 200) < halfLength && Math.abs(y + 0.5 - 150) < halfHeight;
+    const original = new Uint8ClampedArray(w * h * 4);
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        const v = onBar(x, y) ? 250 : Math.round(truth(x + 0.5, y + 0.5));
+        original.set([v, v, v, 255], (y * w + x) * 4);
+      }
+    const data = original.slice();
+    const readFrom =
+      (src: Uint8ClampedArray): ReadPixels =>
+      (r) => {
+        const out = new Uint8ClampedArray(r.w * r.h * 4);
+        for (let j = 0; j < r.h; j++)
+          out.set(
+            src.subarray(((r.y + j) * w + r.x) * 4, ((r.y + j) * w + r.x + r.w) * 4),
+            j * r.w * 4,
+          );
+        return out;
+      };
+    const surface: Surface = {
+      width: w,
+      height: h,
+      read: (x, y, rw, rh) => readFrom(data)({ x, y, w: rw, h: rh }),
+      write: (src, x, y, rw, rh) => {
+        for (let j = 0; j < rh; j++)
+          data.set(src.subarray(j * rw * 4, (j + 1) * rw * 4), ((y + j) * w + x) * 4);
+      },
+    };
+    return { onBar, data, surface, read: readFrom(original) };
+  }
+
+  /** What the overlay does: a source found at the first point, then dabs along the pointer's path. */
+  function dragAlong(
+    s: ReturnType<typeof scene>,
+    path: [number, number][],
+    brushPx: number,
+    interpolate = true,
+  ) {
+    const radius = brushPx / Math.min(w, h);
+    const found = autoSourceFor(s.read, w, h, { x: path[0]![0] / w, y: path[0]![1] / h }, radius)!;
+    expect(found).not.toBeNull();
+    const strokes: HealStroke[] = [];
+    let last: { x: number; y: number } | null = null;
+    for (const [px, py] of path) {
+      const at = { x: px / w, y: py / h };
+      const points: { x: number; y: number }[] = interpolate
+        ? dabsAlong(last, at, 0.25 * brushPx, w, h)
+        : last === null || Math.hypot((at.x - last.x) * w, (at.y - last.y) * h) >= 0.25 * brushPx
+          ? [at]
+          : [];
+      for (const p of points) {
+        strokes.push({
+          x: p.x,
+          y: p.y,
+          dx: found.dx,
+          dy: found.dy,
+          radius,
+          softness: 30,
+          mode: "heal",
+        });
+        last = p;
+      }
+    }
+    applyStrokes(s.surface, strokes);
+    return strokes.length;
+  }
+
+  const errorOver = (s: ReturnType<typeof scene>) => {
+    let worst = 0;
+    let sum = 0;
+    let n = 0;
+    for (let y = 0; y < h; y++)
+      for (let x = 0; x < w; x++) {
+        if (!s.onBar(x, y)) continue;
+        const e = Math.abs(s.data[(y * w + x) * 4]! - truth(x + 0.5, y + 0.5));
+        worst = Math.max(worst, e);
+        sum += e;
+        n++;
+      }
+    return { worst, mean: sum / n };
+  };
+
+  it("heals a long thin scratch dragged along its length, from its end or from its middle", () => {
+    // A 6 px tall, 70 px long scratch and a 12 px brush: the unhealed part ahead of each dab lies
+    // across that dab's measuring ring, and must not pull the result.
+    for (const path of [
+      [
+        [166, 150],
+        [234, 150],
+      ],
+      [
+        [200, 150],
+        [234, 150],
+        [166, 150],
+      ],
+    ] as [number, number][][]) {
+      const s = scene(3, 35);
+      dragAlong(s, path, 12);
+      const e = errorOver(s);
+      expect(e.mean).toBeLessThan(1);
+      expect(e.worst).toBeLessThan(2.5);
+    }
+  });
+
+  it("heals a long swipe made of widely spaced pointer reports, with no gaps", () => {
+    // Four pointer reports 60 px apart with an 8 px brush: a dab only at each report would leave
+    // 52 px of bar untouched between them.
+    const s = scene(3, 90);
+    const dabs = dragAlong(
+      s,
+      [
+        [110, 150],
+        [170, 150],
+        [230, 150],
+        [290, 150],
+      ],
+      8,
+    );
+    expect(dabs).toBeGreaterThan(80); // a dab every 2 px along 180 px
+    // Along the whole bar, in every column, the bar is gone.
+    for (let x = 112; x < 290; x += 6) {
+      for (let y = 147; y < 153; y++) {
+        expect(Math.abs(s.data[(y * w + x) * 4]! - truth(x + 0.5, y + 0.5))).toBeLessThan(8);
+      }
+    }
+  });
+
+  it("(control) the same swipe with a dab only at each report leaves the bar mostly unhealed", () => {
+    // Proves the test above can fail: this is what the overlay did before dabs were interpolated.
+    const s = scene(3, 90);
+    const dabs = dragAlong(
+      s,
+      [
+        [110, 150],
+        [170, 150],
+        [230, 150],
+        [290, 150],
+      ],
+      8,
+      false,
+    );
+    expect(dabs).toBe(4);
+    expect(errorOver(s).mean).toBeGreaterThan(50);
   });
 });

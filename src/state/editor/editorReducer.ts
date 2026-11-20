@@ -123,6 +123,7 @@ type Action =
   | { type: "setMaskBrushSize"; value: number }
   | { type: "setMaskBrushSoftness"; value: number }
   | { type: "addHealStroke"; stroke: HealStroke }
+  | { type: "addHealStrokes"; strokes: HealStroke[] }
   | { type: "setHealBrushSize"; value: number }
   | { type: "setHealBrushSoftness"; value: number }
   | { type: "setHealMode"; mode: HealMode }
@@ -268,6 +269,17 @@ function reducer(state: State, action: Action): State {
         ...state,
         edit: { ...state.edit, healStrokes: [...state.edit.healStrokes, action.stroke] },
       };
+    // Several dabs from one pointer report (a quick swipe): one state change, not one each.
+    case "addHealStrokes":
+      return action.strokes.length === 0
+        ? state
+        : {
+            ...state,
+            edit: {
+              ...state.edit,
+              healStrokes: [...state.edit.healStrokes, ...action.strokes],
+            },
+          };
     case "setHealBrushSize":
       return { ...state, healBrushSize: action.value };
     case "setHealBrushSoftness":

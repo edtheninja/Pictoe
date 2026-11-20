@@ -12,7 +12,10 @@ import { dabAlpha, dabReach, sampleSource, type Dab, type Patch, cloneDab } from
  *      That is how much the source would have to change to match the target there. Pixels are
  *      grouped into RING_BINS angular sectors and averaged, giving one colour offset per
  *      direction around the dab. The ring is outside the radius, so the thing being healed (a
- *      blemish, a wire) is not in it.
+ *      blemish, a wire) is not in it, except where it runs on beyond the dab (a scratch, a hair,
+ *      the part of a long stroke not yet painted). Such pixels are filtered out: stray pixels
+ *      inside a sector by clipping (CLIP_*), and whole sectors by a median across neighbouring
+ *      sectors (MEDIAN_*), which tolerates a contaminating spike up to about 45 degrees wide.
  *   2. Membrane. Inside the ring the offset is the smoothest surface that matches it: the
  *      harmonic function with those boundary values (the Laplace solution, which is also what
  *      Poisson image editing produces for an offset field). On a disc it has a closed form: split
@@ -28,10 +31,11 @@ import { dabAlpha, dabReach, sampleSource, type Dab, type Patch, cloneDab } from
  * If there is nothing to measure (the ring falls off the image or off the source), the offset is
  * zero and the dab is exactly a clone.
  *
- * Cost, measured in Node on a 3000 x 2000 image (15 Nov 2026): about 3 times a clone dab, per
- * dab: 1.2 ms at radius 30 px, 4 ms at 60 px, 18 ms at 120 px, 73 ms at 240 px (a clone is 0.4,
- * 1.3, 5 and 33 ms). It grows with the dab's area, plus a fixed 16-term series per pixel. A drag
- * adds many dabs, so the render step needs to paint them incrementally, as the clone stamp does.
+ * Cost, measured in Node on a 3000 x 2000 image (15 Nov 2026, after the ring filtering below; the
+ * figures are noisy): 1.6 ms at radius 30 px, 8 ms at 60, 21 ms at 120, 83 ms at 240, which is
+ * roughly 4 times a clone dab (1.1, 1.3, 5 and 22 ms). It grows with the dab's area, plus a
+ * fixed 16-term series per pixel. A drag adds many dabs, so they are painted incrementally, as
+ * the clone stamp's are.
  */
 
 /** Angular sectors around the dab. 32 gives a frequency limit of 16 per turn. */
@@ -39,6 +43,48 @@ export const RING_BINS = 32;
 
 const HALF = RING_BINS / 2;
 const CHANNELS = 3; // R, G, B; alpha is never offset
+
+/**
+ * Outlier rejection on the ring. Whatever crosses the ring (the rest of a scratch, a hair, the
+ * edge of the blemish itself) gives pixels whose offset is far from their neighbours', and would
+ * drag the whole sector's average with it. So each sector is averaged, pixels further from that
+ * average than CLIP_SIGMA standard deviations (and further than CLIP_MIN colour levels, so a
+ * very clean ring is not trimmed to nothing) are set aside, and the sector is averaged again
+ * from the rest, CLIP_ROUNDS times. This works while the outliers are the minority of a sector.
+ */
+export const CLIP_SIGMA = 2;
+export const CLIP_MIN = 6;
+export const CLIP_ROUNDS = 3;
+
+/**
+ * Outlier rejection across the ring. When a blemish is long (a scratch, a wire, a hair), the part
+ * of it not yet healed lies across the ring in one direction and fills a few whole sectors, which
+ * clipping inside a sector cannot catch. Those sectors are a narrow spike in the offset going
+ * round the circle, so each sector's offset is replaced by the median of itself and its
+ * neighbours (MEDIAN_WINDOW sectors in all, round the circle). A median removes spikes narrower
+ * than half the window but keeps real steps (a horizon edge across the ring) sharp.
+ *
+ * It only replaces a sector that is more than MEDIAN_TOLERANCE colour levels from that median.
+ * A median of smooth variation (the offset changing gently round the ring, as when the source is
+ * flat and the target a gradient) shaves a few percent off its peaks; leaving sectors within the
+ * tolerance alone keeps that variation exact, while a scratch's offset is off by far more.
+ * The window of 9 tolerates a spike up to 4 sectors wide (about 45 degrees of the ring).
+ */
+export const MEDIAN_WINDOW = 9;
+export const MEDIAN_TOLERANCE = 6;
+
+/** Per-pixel scratch for one ring measurement, reused between dabs and grown as needed. */
+let scratchOffsets = new Float32Array(0); // n x CHANNELS
+let scratchBins = new Uint8Array(0);
+let scratchKept = new Uint8Array(0);
+
+function ensureScratch(pixels: number) {
+  if (scratchBins.length >= pixels) return;
+  const size = Math.max(pixels, 1024);
+  scratchOffsets = new Float32Array(size * CHANNELS);
+  scratchBins = new Uint8Array(size);
+  scratchKept = new Uint8Array(size);
+}
 
 const clamp255 = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : v);
 
@@ -65,12 +111,12 @@ export function ringOffsets(
   imgH: number,
 ): Ring | null {
   const reach = dabReach({ ...d, mode: "heal" });
-  const sums = new Float64Array(RING_BINS * CHANNELS);
-  const counts = new Uint32Array(RING_BINS);
   const sampled = new Float64Array(4);
+  ensureScratch(dst.w * dst.h);
+  let n = 0;
   let distSum = 0;
-  let used = 0;
 
+  // Pass 1: every usable ring pixel's (target - source), and the sector it is in.
   for (let py = 0; py < dst.h; py++) {
     for (let px = 0; px < dst.w; px++) {
       const gx = dst.x + px + 0.5;
@@ -80,39 +126,87 @@ export function ringOffsets(
       if (!sampleSource(src, imgW, imgH, gx + d.dx - 0.5, gy + d.dy - 0.5, sampled)) continue;
 
       const angle = Math.atan2(gy - d.cy, gx - d.cx); // -π … π
-      const bin = Math.min(
+      scratchBins[n] = Math.min(
         RING_BINS - 1,
         Math.floor(((angle + Math.PI) / (2 * Math.PI)) * RING_BINS),
       );
       const at = (py * dst.w + px) * 4;
-      for (let c = 0; c < CHANNELS; c++) {
-        sums[bin * CHANNELS + c]! += dst.data[at + c]! - sampled[c]!;
-      }
-      counts[bin]!++;
+      for (let c = 0; c < CHANNELS; c++)
+        scratchOffsets[n * CHANNELS + c] = dst.data[at + c]! - sampled[c]!;
+      scratchKept[n] = 1;
       distSum += dist;
-      used++;
+      n++;
     }
+  }
+  if (n === 0) return null;
+
+  // Passes 2..: average each sector over the pixels still kept, then drop the pixels that are
+  // far from their sector's average, and repeat.
+  const sums = new Float64Array(RING_BINS * CHANNELS);
+  const squares = new Float64Array(RING_BINS * CHANNELS);
+  const counts = new Uint32Array(RING_BINS);
+  const mean = new Float64Array(RING_BINS * CHANNELS);
+  const limit = new Float64Array(RING_BINS * CHANNELS);
+
+  const average = () => {
+    sums.fill(0);
+    squares.fill(0);
+    counts.fill(0);
+    for (let i = 0; i < n; i++) {
+      if (!scratchKept[i]) continue;
+      const bin = scratchBins[i]!;
+      counts[bin]!++;
+      for (let c = 0; c < CHANNELS; c++) {
+        const v = scratchOffsets[i * CHANNELS + c]!;
+        sums[bin * CHANNELS + c]! += v;
+        squares[bin * CHANNELS + c]! += v * v;
+      }
+    }
+    for (let j = 0; j < RING_BINS; j++) {
+      for (let c = 0; c < CHANNELS; c++) {
+        const k = j * CHANNELS + c;
+        if (counts[j]! === 0) continue;
+        mean[k] = sums[k]! / counts[j]!;
+        const variance = Math.max(0, squares[k]! / counts[j]! - mean[k]! * mean[k]!);
+        limit[k] = Math.max(CLIP_SIGMA * Math.sqrt(variance), CLIP_MIN);
+      }
+    }
+  };
+
+  average();
+  for (let round = 0; round < CLIP_ROUNDS; round++) {
+    for (let i = 0; i < n; i++) {
+      const bin = scratchBins[i]!;
+      let inside = 1;
+      for (let c = 0; c < CHANNELS; c++) {
+        const k = bin * CHANNELS + c;
+        if (Math.abs(scratchOffsets[i * CHANNELS + c]! - mean[k]!) > limit[k]!) inside = 0;
+      }
+      scratchKept[i] = inside;
+    }
+    // A sector must keep something: if clipping emptied it, keep everything in it.
+    const keptPerBin = new Uint32Array(RING_BINS);
+    for (let i = 0; i < n; i++) if (scratchKept[i]) keptPerBin[scratchBins[i]!]!++;
+    for (let i = 0; i < n; i++) if (keptPerBin[scratchBins[i]!]! === 0) scratchKept[i] = 1;
+    average();
   }
 
   const offsets = new Float64Array(RING_BINS * CHANNELS);
-  const filled: number[] = [];
+  const filled: boolean[] = [];
   for (let j = 0; j < RING_BINS; j++) {
-    if (counts[j]! === 0) continue;
-    filled.push(j);
-    for (let c = 0; c < CHANNELS; c++) {
-      offsets[j * CHANNELS + c] = sums[j * CHANNELS + c]! / counts[j]!;
-    }
+    filled[j] = counts[j]! > 0;
+    if (!filled[j]) continue;
+    for (let c = 0; c < CHANNELS; c++) offsets[j * CHANNELS + c] = mean[j * CHANNELS + c]!;
   }
-  if (filled.length === 0) return null;
 
   // Fill empty sectors by interpolating between the nearest filled ones, going round the circle.
-  if (filled.length < RING_BINS) {
+  if (filled.some((f) => !f)) {
     for (let j = 0; j < RING_BINS; j++) {
-      if (counts[j]! > 0) continue;
+      if (filled[j]) continue;
       let before = 1;
-      while (counts[(j - before + RING_BINS) % RING_BINS]! === 0) before++;
+      while (!filled[(j - before + RING_BINS) % RING_BINS]) before++;
       let after = 1;
-      while (counts[(j + after) % RING_BINS]! === 0) after++;
+      while (!filled[(j + after) % RING_BINS]) after++;
       const jb = (j - before + RING_BINS) % RING_BINS;
       const ja = (j + after) % RING_BINS;
       const wAfter = before / (before + after); // nearer neighbour counts for more
@@ -122,7 +216,26 @@ export function ringOffsets(
       }
     }
   }
-  return { offsets, radius: distSum / used };
+  return { offsets: medianRound(offsets), radius: distSum / n };
+}
+
+/** Each sector's offset replaced by the median of the MEDIAN_WINDOW sectors around it (circular), where it is an outlier. */
+export function medianRound(offsets: Float64Array): Float64Array {
+  const out = new Float64Array(offsets.length);
+  const half = (MEDIAN_WINDOW - 1) / 2;
+  const window = new Float64Array(MEDIAN_WINDOW);
+  for (let j = 0; j < RING_BINS; j++) {
+    for (let c = 0; c < CHANNELS; c++) {
+      for (let k = -half; k <= half; k++) {
+        window[k + half] = offsets[((j + k + RING_BINS) % RING_BINS) * CHANNELS + c]!;
+      }
+      window.sort();
+      const own = offsets[j * CHANNELS + c]!;
+      const median = window[half]!;
+      out[j * CHANNELS + c] = Math.abs(own - median) > MEDIAN_TOLERANCE ? median : own;
+    }
+  }
+  return out;
 }
 
 /** A ring's offsets split into angular frequencies: coefficient k, channel c, real and imaginary. */

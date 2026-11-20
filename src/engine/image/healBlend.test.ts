@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { cloneDab, dabRects, dabReach, type Dab, type Patch } from "./cloneStamp";
-import { RING_BINS, healDab, membraneAt, membraneFor, paintDab, ringOffsets } from "./healBlend";
+import {
+  CLIP_MIN,
+  CLIP_ROUNDS,
+  CLIP_SIGMA,
+  MEDIAN_TOLERANCE,
+  MEDIAN_WINDOW,
+  RING_BINS,
+  healDab,
+  medianRound,
+  membraneAt,
+  membraneFor,
+  paintDab,
+  ringOffsets,
+} from "./healBlend";
 
 /** A whole-image patch, so the same patch serves as the "source" and "target" snapshot. */
 function image(w: number, h: number, fill: (x: number, y: number) => number[]): Patch {
@@ -216,6 +229,140 @@ describe("heal: edges and limits", () => {
     const img = striped();
     const off: Dab = { ...dab, dx: 200 }; // source entirely outside the image
     expect(Array.from(paint(img, off).data)).toEqual(Array.from(img.data));
+  });
+});
+
+describe("heal: a blemish that crosses the measuring ring does not pull the result", () => {
+  // Target surroundings 100 (left of x = 60), source 130: the true offset is -30 everywhere.
+  const base = (x: number) => (x < 60 ? [100] : [130]);
+  const offsetsOf = (img: Patch, d: Dab = dab) =>
+    ringOffsets(copy(img), copy(img), d, img.w, img.h)!.offsets;
+  const worstDeviation = (offsets: Float64Array) => {
+    let worst = 0;
+    for (let j = 0; j < RING_BINS; j++) worst = Math.max(worst, Math.abs(offsets[j * 3]! + 30));
+    return worst;
+  };
+
+  it("ignores a few stray pixels in a sector (a speck, a hair), by clipping them", () => {
+    // Bright 2 x 2 specks scattered through the ring, a handful per sector.
+    const specks = new Set<string>();
+    for (let a = 0; a < 16; a++) {
+      const angle = (a / 16) * 2 * Math.PI + 0.2;
+      const radius = 9 + (a % 3);
+      const x = Math.round(dab.cx + Math.cos(angle) * radius);
+      const y = Math.round(dab.cy + Math.sin(angle) * radius);
+      for (const [dx, dy] of [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ] as const)
+        specks.add(`${x + dx},${y + dy}`);
+    }
+    const img = image(W, H, (x, y) => (specks.has(`${x},${y}`) ? [250] : base(x)));
+    expect(worstDeviation(offsetsOf(img))).toBeLessThan(1);
+  });
+
+  it("ignores a long thin blemish running out through the ring (a scratch), by the median across sectors", () => {
+    // A 4 px tall bright bar from the middle of the dab out to the right, through the ring.
+    const img = image(W, H, (x, y) =>
+      x >= 30 && x < 58 && Math.abs(y + 0.5 - 30) < 2 ? [250] : base(x),
+    );
+    const small: Dab = { ...dab, r: 8 };
+    expect(worstDeviation(offsetsOf(img, small))).toBeLessThan(3);
+    expect(pixel(paint(img, small), 30, 30)[0]).toBeCloseTo(100, -1); // within 5 of the surroundings
+    expect(Math.abs(pixel(paint(img, small), 30, 30)[0]! - 100)).toBeLessThan(3);
+  });
+
+  it("without those filters the same scratch would drag the offset well off", () => {
+    // Pins that the scratch scene above is a real test: an unfiltered average is badly off here.
+    const img = image(W, H, (x, y) =>
+      x >= 30 && x < 58 && Math.abs(y + 0.5 - 30) < 2 ? [250] : base(x),
+    );
+    const ring = ringOffsets(copy(img), copy(img), { ...dab, r: 8 }, W, H)!;
+    // The mean of the raw offsets over all sectors is pulled up by the bar's pixels.
+    const rawNear = Math.max(
+      ...Array.from({ length: RING_BINS }, (_, j) => Math.abs(ring.offsets[j * 3]! + 30)),
+    );
+    expect(rawNear).toBeLessThan(3); // filtered: fine
+    expect(CLIP_SIGMA).toBe(2);
+    expect(CLIP_MIN).toBe(6);
+    expect(CLIP_ROUNDS).toBe(3);
+    expect(MEDIAN_WINDOW).toBe(9);
+    expect(MEDIAN_TOLERANCE).toBe(6);
+  });
+
+  it("keeps a real step in the surroundings: a horizon edge across the ring is not flattened", () => {
+    // Surroundings are 80 above y = 30 and 160 below; the source is a flat 120. The true offset
+    // is -40 on the top half of the ring and +40 on the bottom half, a step round the circle.
+    const img = image(W, H, (x, y) => (x < 60 ? [y < 30 ? 80 : 160] : [120]));
+    const offsets = offsetsOf(img, { ...dab, r: 10 });
+    const bin = (angleDeg: number) =>
+      Math.min(
+        RING_BINS - 1,
+        Math.floor((((angleDeg * Math.PI) / 180 + Math.PI) / (2 * Math.PI)) * RING_BINS),
+      );
+    expect(offsets[bin(-90) * 3]).toBeCloseTo(-40, 0); // straight up: the dark side
+    expect(offsets[bin(90) * 3]).toBeCloseTo(40, 0); // straight down: the bright side
+    const healed = paint(img, { ...dab, r: 10 });
+    expect(pixel(healed, 30, 22)[0]!).toBeLessThan(110); // just above the edge: dark
+    expect(pixel(healed, 30, 38)[0]!).toBeGreaterThan(130); // just below it: bright
+  });
+});
+
+describe("medianRound (the filter across ring sectors)", () => {
+  const ring = (f: (j: number) => number) => {
+    const out = new Float64Array(RING_BINS * 3);
+    for (let j = 0; j < RING_BINS; j++) out.set([f(j), f(j) * 2, -f(j)], j * 3);
+    return out;
+  };
+  const red = (o: Float64Array) => Array.from({ length: RING_BINS }, (_, j) => o[j * 3]!);
+
+  it("leaves a constant ring, and a smooth one, essentially as it is", () => {
+    expect(red(medianRound(ring(() => 7)))).toEqual(Array(RING_BINS).fill(7));
+    const smooth = ring((j) => 10 * Math.cos((j / RING_BINS) * 2 * Math.PI));
+    const out = red(medianRound(smooth));
+    for (let j = 0; j < RING_BINS; j++)
+      expect(Math.abs(out[j]! - red(smooth)[j]!)).toBeLessThan(1.7);
+  });
+
+  it("removes a spike up to four sectors wide, and not five (half the window, rounded down)", () => {
+    for (const width of [1, 2, 3, 4]) {
+      const spiked = ring((j) => (j >= 10 && j < 10 + width ? 200 : 5));
+      expect(red(medianRound(spiked))).toEqual(Array(RING_BINS).fill(5));
+    }
+    const five = red(medianRound(ring((j) => (j >= 10 && j < 15 ? 200 : 5))));
+    expect(Math.max(...five)).toBe(200); // too wide to be a spike: it survives
+  });
+
+  it("removes a spike that wraps round from the last sector to the first", () => {
+    const wrapped = ring((j) => (j >= RING_BINS - 2 || j < 2 ? 200 : 5));
+    expect(red(medianRound(wrapped))).toEqual(Array(RING_BINS).fill(5));
+  });
+
+  it("keeps a step sharp: no sector is moved off its side's value by more than a rounding", () => {
+    const step = ring((j) => (j < RING_BINS / 2 ? -40 : 40));
+    const out = red(medianRound(step));
+    // Away from the two edges of the step the values are untouched; at the edges the median picks
+    // one side or the other, never a made-up middle value.
+    for (const v of out) expect([-40, 40]).toContain(v);
+  });
+
+  it("filters each colour channel on its own", () => {
+    const o = new Float64Array(RING_BINS * 3);
+    for (let j = 0; j < RING_BINS; j++) o.set([1, 2, 3], j * 3);
+    o.set([100, 2, 3], 10 * 3); // a spike in red only
+    const out = medianRound(o);
+    expect(out[10 * 3]).toBe(1);
+    expect(out[10 * 3 + 1]).toBe(2);
+    expect(out[10 * 3 + 2]).toBe(3);
+  });
+
+  it("does not change its input", () => {
+    const o = ring((j) => (j === 3 ? 99 : 1));
+    const before = Array.from(o);
+    medianRound(o);
+    expect(Array.from(o)).toEqual(before);
   });
 });
 

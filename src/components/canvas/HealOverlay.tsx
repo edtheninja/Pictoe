@@ -8,6 +8,7 @@ import {
   sourceToOutput,
 } from "@/engine/image/maskSpace";
 import { autoSourceFor } from "@/engine/image/healTap";
+import { dabsAlong } from "@/engine/image/strokePath";
 import { readSourceWindow } from "@/engine/image/sourcePixels";
 
 /** How long the "no source found" notice stays up. */
@@ -33,7 +34,7 @@ type Point = { x: number; y: number };
  * undo step. A second finger means pinch-to-zoom, so it stops painting.
  */
 export function HealOverlay() {
-  const { state, addHealStroke, setHealSource, setHealOffset, beginInteraction, endInteraction } =
+  const { state, addHealStrokes, setHealSource, setHealOffset, beginInteraction, endInteraction } =
     useEditor();
   const containerRef = useRef<HTMLDivElement>(null);
   const paintingPointer = useRef<number | null>(null);
@@ -70,21 +71,22 @@ export function HealOverlay() {
   const paintAt = (at: Point) => {
     const offset = offsetRef.current;
     if (!offset) return;
-    const last = lastDab.current;
-    if (last) {
-      const moved = Math.hypot((at.x - last.x) * source.width, (at.y - last.y) * source.height);
-      if (moved < SPACING * brushPx) return;
-    }
-    lastDab.current = at;
-    addHealStroke({
-      x: at.x,
-      y: at.y,
-      dx: offset.dx,
-      dy: offset.dy,
-      radius: brushRadius,
-      softness: state.healBrushSoftness,
-      ...(healing ? { mode: "heal" as const } : {}),
-    });
+    // One dab where the pointer went down, then one every SPACING brush radii along the path, so
+    // a quick swipe (two pointer reports far apart) leaves no gaps.
+    const points = dabsAlong(lastDab.current, at, SPACING * brushPx, source.width, source.height);
+    if (points.length === 0) return;
+    lastDab.current = points[points.length - 1]!;
+    addHealStrokes(
+      points.map((p) => ({
+        x: p.x,
+        y: p.y,
+        dx: offset.dx,
+        dy: offset.dy,
+        radius: brushRadius,
+        softness: state.healBrushSoftness,
+        ...(healing ? { mode: "heal" as const } : {}),
+      })),
+    );
   };
 
   const finishPainting = () => {
