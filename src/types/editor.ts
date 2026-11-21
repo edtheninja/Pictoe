@@ -77,6 +77,12 @@ export type HealMode = "clone" | "heal";
 
 export const HEAL_MODES: readonly HealMode[] = ["clone", "heal"];
 
+/**
+ * The mode the Heal tool opens in. Heal, because tapping a spot and seeing it fixed needs nothing
+ * explained, whereas Clone needs a source chosen first. To go back to Clone-first, change this.
+ */
+export const DEFAULT_HEAL_MODE: HealMode = "heal";
+
 /** The mode of a stroke, with the saved-before-modes default applied. */
 export function healModeOf(stroke: Pick<HealStroke, "mode">): HealMode {
   return stroke.mode ?? "clone";

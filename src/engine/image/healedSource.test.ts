@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { applyStrokes, HealedSources, type Surface } from "./healedSource";
+import { profileSummary, resetProfile, setProfiling } from "./profile";
 import type { HealStroke } from "@/types/editor";
 
 /** An in-memory surface: a w×h RGBA array standing in for a canvas. */
@@ -236,5 +237,116 @@ describe("HealedSources", () => {
     const b = cache.get({}, W, W, strokes);
     expect(a).not.toBe(b);
     expect(made).toHaveLength(2);
+  });
+});
+
+describe("heal profiling stages (opt-in, for `?profile` in a real browser)", () => {
+  afterEach(() => {
+    setProfiling(false);
+    resetProfile();
+  });
+
+  const N = 60;
+  const stroke = (x: number): HealStroke => ({
+    x: x / N,
+    y: 10.5 / N,
+    dx: 30 / N,
+    dy: 0,
+    radius: 4 / N,
+    softness: 0,
+    mode: "heal",
+  });
+  const cache = () =>
+    new HealedSources<object, object>((_s, w, h) => {
+      const s = arraySurface(w, h, () => [100, 100, 100, 255]);
+      return { canvas: s.data, surface: s.surface };
+    });
+  const stages = () => Object.fromEntries(profileSummary().map((r) => [r.stage, r.samples]));
+
+  it("records nothing at all when profiling is off", () => {
+    resetProfile();
+    setProfiling(false);
+    const c = cache();
+    const src = {};
+    c.get(src, N, N, [stroke(10.5)]);
+    c.get(src, N, N, [stroke(10.5), stroke(14.5)]);
+    expect(profileSummary()).toEqual([]);
+  });
+
+  it("times the surface it creates once, and each batch of dabs it paints, with a per-dab figure", () => {
+    resetProfile();
+    setProfiling(true);
+    const c = cache();
+    const src = {};
+    // The same stroke objects each time, as in the app, where the list only grows at the end.
+    const [a, b, d] = [stroke(10.5), stroke(14.5), stroke(18.5)] as [
+      HealStroke,
+      HealStroke,
+      HealStroke,
+    ];
+    c.get(src, N, N, [a]); // creates the surface, paints 1 dab
+    expect(stages()).toMatchObject({
+      "heal surface (create)": 1,
+      "heal dabs (batch)": 1,
+      "heal dab (each)": 1,
+    });
+
+    c.get(src, N, N, [a, b, d]); // appends 2 dabs: one more batch, no new surface
+    expect(stages()).toMatchObject({
+      "heal surface (create)": 1,
+      "heal dabs (batch)": 2,
+      "heal dab (each)": 2,
+    });
+  });
+
+  it("the per-dab figure is the batch time divided by the number of dabs in it", () => {
+    resetProfile();
+    setProfiling(true);
+    // Enough real work (30 heal dabs of radius 24 px on a 400 x 400 picture) to measure above the
+    // summary's 0.1 ms rounding.
+    const size = 400;
+    const count = 30;
+    const cacheBig = new HealedSources<object, object>((_s, w, h) => {
+      const s = arraySurface(w, h, (x, y) => [100 + ((x * 7 + y * 13) % 40), 100, 100, 255]);
+      return { canvas: s.data, surface: s.surface };
+    });
+    const strokes = Array.from({ length: count }, (_, i) => ({
+      x: (60 + i * 8) / size,
+      y: 100 / size,
+      dx: 200 / size,
+      dy: 0,
+      radius: 24 / size,
+      softness: 30,
+      mode: "heal" as const,
+    }));
+    cacheBig.get({}, size, size, strokes);
+
+    const rows = Object.fromEntries(profileSummary().map((r) => [r.stage, r]));
+    const batch = rows["heal dabs (batch)"]!.median;
+    const each = rows["heal dab (each)"]!.median;
+    expect(batch).toBeGreaterThan(count * 0.1); // real work, so the check below means something
+    // Both figures are rounded to 0.1 ms, so allow exactly that: up to 0.05 ms of rounding on each
+    // of the `count` dabs, plus 0.05 ms on the batch.
+    expect(Math.abs(each * count - batch)).toBeLessThanOrEqual(0.05 * count + 0.1);
+  });
+
+  it("does not record a render that reuses the cache, so the numbers are not watered down", () => {
+    resetProfile();
+    setProfiling(true);
+    const c = cache();
+    const src = {};
+    const strokes = [stroke(10.5), stroke(14.5)];
+    c.get(src, N, N, strokes);
+    const before = stages();
+    for (let i = 0; i < 5; i++) c.get(src, N, N, strokes); // five renders, nothing new to paint
+    expect(stages()).toEqual(before);
+  });
+
+  it("records nothing for an empty batch", () => {
+    resetProfile();
+    setProfiling(true);
+    const c = cache();
+    c.get({}, N, N, []);
+    expect(stages()["heal dabs (batch)"]).toBeUndefined();
   });
 });

@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { HEAL_MODES, healChangeLabel, healModeOf } from "./editor";
+import { DEFAULT_HEAL_MODE, HEAL_MODES, healChangeLabel, healModeOf } from "./editor";
 
 describe("heal modes", () => {
   it("are clone and heal, and nothing else", () => {
     expect([...HEAL_MODES]).toEqual(["clone", "heal"]);
+  });
+
+  it("open in Heal by default, a mode that exists", () => {
+    expect(DEFAULT_HEAL_MODE).toBe("heal");
+    expect(HEAL_MODES).toContain(DEFAULT_HEAL_MODE);
+    // A stroke saved without a mode is still a clone, whatever the tool opens in: the default is
+    // for new strokes, and must never change how old ones read.
+    expect(healModeOf({})).toBe("clone");
   });
 
   it("read a stroke with no mode as a clone, and any set mode as itself", () => {

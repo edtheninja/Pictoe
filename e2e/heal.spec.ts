@@ -129,10 +129,19 @@ test.describe("heal mode", () => {
     await expect.poll(async () => await redFraction(page)).toBeLessThan(before * 0.1);
   });
 
-  test("Clone mode is still there and still asks for a source", async ({ page }) => {
+  test("opens in Heal mode, and Clone is one click away and still asks for a source", async ({
+    page,
+  }) => {
     await openTestPhoto(page);
     await page.getByRole("button", { name: "Heal", exact: true }).click();
-    // Clone is the default, and switching back and forth keeps it working.
+    // Heal is the default: it never asks for a source.
+    await expect(page.getByRole("radio", { name: "Heal", exact: true })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(page.getByText("Tap a clean area to copy from")).toHaveCount(0);
+
+    await page.getByRole("radio", { name: "Clone", exact: true }).click();
     await expect(page.getByRole("radio", { name: "Clone", exact: true })).toHaveAttribute(
       "aria-checked",
       "true",
@@ -141,7 +150,5 @@ test.describe("heal mode", () => {
 
     await page.getByRole("radio", { name: "Heal", exact: true }).click();
     await expect(page.getByText("Tap a clean area to copy from")).toHaveCount(0);
-    await page.getByRole("radio", { name: "Clone", exact: true }).click();
-    await expect(page.getByText("Tap a clean area to copy from")).toBeVisible();
   });
 });

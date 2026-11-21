@@ -18,7 +18,7 @@ The idea behind it is **progressive power**: complexity is revealed when you nee
 - **Per-colour saturation** for red, orange, yellow, green, blue and purple, so you can lift the greens without touching skin tones.
 - **Crop** with aspect-ratio presets, 90° rotation and horizontal flip.
 - **Local areas ("Local" tool).** Paint a region with a brush, then give that area its own exposure, contrast, saturation and temperature, with highlights, shadows, tint, clarity and sharpness behind "More controls". Stack as many areas as you like. The brush has adjustable size and softness, plus an eraser. Areas have their own undo/redo and are saved with your session.
-- **Heal and Clone.** In Heal mode, tap a spot or paint over a blemish and Pictoe finds a clean place nearby to copy from and blends the patch into its surroundings. In Clone mode you pick the source yourself and the pixels are copied as they are. Every stroke is saved as data, so a whole drag is one undo step and the strokes follow your crop, rotation and flip.
+- **Heal and Clone.** The tool opens in Heal mode: tap a spot or paint over a blemish and Pictoe finds a clean place nearby to copy from and blends the patch into its surroundings. In Clone mode you pick the source yourself and the pixels are copied as they are. Every stroke is saved as data, so a whole drag is one undo step and the strokes follow your crop, rotation and flip.
 - **Presets.** Five built-in looks (Warm Film, Moody B&W, Vivid Pop, Cool Blue, Soft Portrait) plus your own, saved locally.
 
 ### Control and safety

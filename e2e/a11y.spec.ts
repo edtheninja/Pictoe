@@ -62,6 +62,10 @@ for (const vp of sizes) {
         await openTool(page, tool);
         found.push(...(await violations(page, `tool ${tool}`)));
       }
+      // The Heal tool opens in Heal mode (scanned above); scan its Clone mode too.
+      await openTool(page, "Heal");
+      await page.getByRole("radio", { name: "Clone", exact: true }).click();
+      found.push(...(await violations(page, "tool Heal (Clone mode)")));
       await page.getByRole("button", { name: "Export" }).click();
       await expect(page.getByRole("dialog", { name: "Export options" })).toBeVisible();
       found.push(...(await violations(page, "export popover")));

@@ -10,6 +10,7 @@ import {
 import { autoSourceFor } from "@/engine/image/healTap";
 import { dabsAlong } from "@/engine/image/strokePath";
 import { readSourceWindow } from "@/engine/image/sourcePixels";
+import { timed } from "@/engine/image/profile";
 
 /** How long the "no source found" notice stays up. */
 const NOTICE_MS = 4000;
@@ -122,12 +123,14 @@ export function HealOverlay() {
         if (!at) return;
 
         if (healing) {
-          const found = autoSourceFor(
-            (rect) => readSourceWindow(source.element, rect),
-            source.width,
-            source.height,
-            at.src,
-            brushRadius,
+          const found = timed("heal: find source", () =>
+            autoSourceFor(
+              (rect) => readSourceWindow(source.element, rect),
+              source.width,
+              source.height,
+              at.src,
+              brushRadius,
+            ),
           );
           if (!found) {
             setNoSource(true);

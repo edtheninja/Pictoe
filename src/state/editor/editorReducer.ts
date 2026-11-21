@@ -7,6 +7,7 @@ import {
   DEFAULT_CROP,
   DEFAULT_EDIT_STATE,
   DEFAULT_LOCAL_ADJUSTMENTS,
+  DEFAULT_HEAL_MODE,
   identityCurves,
   type AdjustmentKey,
   type EditState,
@@ -77,7 +78,7 @@ const initialState: State = {
   maskBrushSoftness: 30,
   healBrushSize: 40,
   healBrushSoftness: 30,
-  healMode: "clone",
+  healMode: DEFAULT_HEAL_MODE,
   healSource: null,
   healOffset: null,
 };

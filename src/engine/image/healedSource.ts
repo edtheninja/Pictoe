@@ -2,6 +2,7 @@ import type { HealStroke } from "@/types/editor";
 import { createCanvas, get2dContext, type AnyCanvas } from "./canvasFactory";
 import { dabFromStroke, dabRects } from "./cloneStamp";
 import { paintDab } from "./healBlend";
+import { profilingEnabled, recordTime } from "./profile";
 import { planStrokeUpdate } from "./incremental";
 
 /** Reading and writing rectangles of pixels, whatever holds them (a canvas, or an array in tests). */
@@ -16,6 +17,20 @@ export type Surface = {
  * Applies clone and heal strokes to a surface, in order. Each dab reads both areas before writing
  * (for a heal dab, the areas include the ring it measures around the target and the source).
  */
+/**
+ * applyStrokes, timed when profiling is on (`?profile`): the whole batch, and the cost per dab,
+ * which is what decides whether a drag keeps up. Only batches that paint are recorded, so a
+ * render that reuses the cache does not water the numbers down.
+ */
+function applyStrokesProfiled(surface: Surface, strokes: readonly HealStroke[]) {
+  if (strokes.length === 0 || !profilingEnabled()) return applyStrokes(surface, strokes);
+  const start = performance.now();
+  applyStrokes(surface, strokes);
+  const ms = performance.now() - start;
+  recordTime("heal dabs (batch)", ms);
+  recordTime("heal dab (each)", ms / strokes.length);
+}
+
 export function applyStrokes(surface: Surface, strokes: readonly HealStroke[]) {
   for (const stroke of strokes) {
     const dab = dabFromStroke(stroke, surface.width, surface.height);
@@ -58,13 +73,17 @@ export class HealedSources<K extends object, C> {
     if (plan === "reuse") return entry!.canvas;
 
     if (plan === "append") {
-      applyStrokes(entry!.surface, strokes.slice(entry!.strokes.length));
+      applyStrokesProfiled(entry!.surface, strokes.slice(entry!.strokes.length));
       entry!.strokes = strokes;
       return entry!.canvas;
     }
 
+    const madeAt = profilingEnabled() ? performance.now() : 0;
     const fresh = this.make(source, w, h);
-    applyStrokes(fresh.surface, strokes);
+    // The full-size copy of the photo the dabs paint on, made once per image (and again after an
+    // undo or any change that is not just more dabs on the end).
+    if (madeAt) recordTime("heal surface (create)", performance.now() - madeAt);
+    applyStrokesProfiled(fresh.surface, strokes);
     this.entries.set(source, { canvas: fresh.canvas, surface: fresh.surface, strokes });
     return fresh.canvas;
   }

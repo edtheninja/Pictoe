@@ -254,11 +254,12 @@ describe("clone (heal) strokes", () => {
     expect(without.edit.healStrokes.map((s) => s.mode)).toEqual(["heal", undefined]);
   });
 
-  it("starts in clone mode, and setHealMode switches between clone and heal", () => {
-    expect(fresh().healMode).toBe("clone");
-    const heal = reducer(fresh(), { type: "setHealMode", mode: "heal" });
-    expect(heal.healMode).toBe("heal");
-    expect(reducer(heal, { type: "setHealMode", mode: "clone" }).healMode).toBe("clone");
+  it("starts in heal mode, and setHealMode switches between heal and clone", () => {
+    // The default is a product decision (see DEFAULT_HEAL_MODE), so it is pinned here as a literal.
+    expect(fresh().healMode).toBe("heal");
+    const clone = reducer(fresh(), { type: "setHealMode", mode: "clone" });
+    expect(clone.healMode).toBe("clone");
+    expect(reducer(clone, { type: "setHealMode", mode: "heal" }).healMode).toBe("heal");
   });
 
   it("switching mode does not touch the edit, its history, or the chosen clone source", () => {
@@ -272,7 +273,7 @@ describe("clone (heal) strokes", () => {
 
   it("setting the mode it already has returns the same state", () => {
     const s = fresh();
-    expect(reducer(s, { type: "setHealMode", mode: "clone" })).toBe(s);
+    expect(reducer(s, { type: "setHealMode", mode: "heal" })).toBe(s);
   });
 
   it("addHealStrokes adds several dabs in order as one state change, and none changes nothing", () => {
