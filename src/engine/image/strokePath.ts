@@ -46,3 +46,19 @@ export function dabsAlong(
   }
   return points;
 }
+
+/**
+ * How long after a stroke begins a second finger still counts as the start of a pinch, in ms.
+ * Fingers rarely land on a screen at the same instant: the first one is already down, and has
+ * already put a dab on the picture, by the time the second arrives. A real stroke has been going
+ * for longer than this; a pinch's second finger follows within a tenth of a second or so.
+ */
+export const PINCH_GRACE_MS = 300;
+
+/**
+ * Whether a second finger landing `elapsedMs` after the stroke began should throw the stroke
+ * away (it was the first half of a pinch, not a stroke) rather than keep it.
+ */
+export function secondFingerCancels(elapsedMs: number): boolean {
+  return elapsedMs >= 0 && elapsedMs < PINCH_GRACE_MS;
+}

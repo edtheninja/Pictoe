@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_DABS_PER_MOVE, dabsAlong } from "./strokePath";
+import { MAX_DABS_PER_MOVE, PINCH_GRACE_MS, dabsAlong, secondFingerCancels } from "./strokePath";
 
 const W = 800;
 const H = 600;
@@ -81,5 +81,22 @@ describe("dabsAlong", () => {
     expect(dabsAlong({ x: 0, y: 0 }, { x: 1, y: 1 }, 0, W, H)).toEqual([]);
     expect(dabsAlong({ x: 0, y: 0 }, { x: 1, y: 1 }, -3, W, H)).toEqual([]);
     expect(dabsAlong({ x: 0, y: 0 }, { x: 1, y: 1 }, Number.NaN, W, H)).toEqual([]);
+  });
+});
+
+describe("secondFingerCancels (a pinch's first finger must not leave a dab)", () => {
+  it("throws the stroke away when the second finger lands within the grace window", () => {
+    expect(PINCH_GRACE_MS).toBe(300);
+    for (const ms of [0, 1, 40, 120, 299]) expect(secondFingerCancels(ms)).toBe(true);
+  });
+
+  it("keeps a stroke that has been going for the grace window or longer", () => {
+    for (const ms of [300, 301, 800, 60_000]) expect(secondFingerCancels(ms)).toBe(false);
+  });
+
+  it("keeps the stroke when the clock gives something odd, rather than destroying work", () => {
+    for (const ms of [-1, -500, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(secondFingerCancels(ms)).toBe(false);
+    }
   });
 });

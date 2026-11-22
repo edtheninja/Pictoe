@@ -8,7 +8,7 @@ import {
   sourceToOutput,
 } from "@/engine/image/maskSpace";
 import { autoSourceFor } from "@/engine/image/healTap";
-import { dabsAlong } from "@/engine/image/strokePath";
+import { dabsAlong, secondFingerCancels } from "@/engine/image/strokePath";
 import { readSourceWindow } from "@/engine/image/sourcePixels";
 import { timed } from "@/engine/image/profile";
 
@@ -32,15 +32,25 @@ type Point = { x: number; y: number };
  * paints nothing.
  *
  * Strokes are stored relative to the source image (like masks), and one drag, or one tap, is one
- * undo step. A second finger means pinch-to-zoom, so it stops painting.
+ * undo step. A second finger means pinch-to-zoom, so it stops painting; and if it lands within
+ * a moment of the first (a pinch starting, not a stroke) the first finger's dab is taken back too.
  */
 export function HealOverlay() {
-  const { state, addHealStrokes, setHealSource, setHealOffset, beginInteraction, endInteraction } =
-    useEditor();
+  const {
+    state,
+    addHealStrokes,
+    setHealSource,
+    setHealOffset,
+    beginInteraction,
+    endInteraction,
+    cancelInteraction,
+  } = useEditor();
   const containerRef = useRef<HTMLDivElement>(null);
   const paintingPointer = useRef<number | null>(null);
   const activePointers = useRef(new Set<number>());
   const lastDab = useRef<Point | null>(null);
+  /** When the current stroke began (ms), to tell a pinch's first finger from a real stroke. */
+  const strokeStartedAt = useRef(0);
   const offsetRef = useRef<{ dx: number; dy: number } | null>(null);
   const [cursor, setCursor] = useState<Point | null>(null); // in the visible frame, 0–1
   const [noSource, setNoSource] = useState(false);
@@ -96,6 +106,13 @@ export function HealOverlay() {
     lastDab.current = null;
   };
 
+  /** Throws the stroke in progress away, as if it had never started, with no undo step. */
+  const cancelPainting = () => {
+    if (paintingPointer.current !== null) cancelInteraction();
+    paintingPointer.current = null;
+    lastDab.current = null;
+  };
+
   // Where the brush is copying from right now, shown as a ring that follows the cursor.
   // (When healing, the ring just shows the brush under the cursor: the source is found on press.)
   const offset = state.healOffset;
@@ -116,7 +133,16 @@ export function HealOverlay() {
       onPointerDown={(e) => {
         activePointers.current.add(e.pointerId);
         if (activePointers.current.size > 1) {
-          finishPainting();
+          // A second finger means pinch and pan. If it came hard on the heels of the first, the
+          // first finger's dab was the start of that pinch and not a stroke: take it back.
+          if (
+            paintingPointer.current !== null &&
+            secondFingerCancels(performance.now() - strokeStartedAt.current)
+          ) {
+            cancelPainting();
+          } else {
+            finishPainting();
+          }
           return;
         }
         const at = locate(e.clientX, e.clientY);
@@ -142,6 +168,7 @@ export function HealOverlay() {
           paintingPointer.current = e.pointerId;
           lastDab.current = null;
           beginInteraction();
+          strokeStartedAt.current = performance.now();
           paintAt(at.src);
           return;
         }
@@ -163,6 +190,7 @@ export function HealOverlay() {
         paintingPointer.current = e.pointerId;
         lastDab.current = null;
         beginInteraction();
+        strokeStartedAt.current = performance.now();
         paintAt(at.src);
       }}
       onPointerMove={(e) => {

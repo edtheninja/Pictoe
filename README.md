@@ -69,6 +69,7 @@ Then open <http://localhost:8080>.
 | `npm run api:types` | Regenerate `src/api/schema.d.ts` from `backend/openapi.json` (after the Rust API changes: `cd backend && cargo run --example openapi > openapi.json` first) |
 | `npm test` | Run the unit tests (Vitest) |
 | `npm run e2e` | Run the end-to-end tests in Chromium (first time: `npx playwright install chromium`) |
+| `npm run e2e:devices` | Run the device tests on WebKit (Safari's engine), an iPhone profile and a Pixel profile (first time: `npx playwright install webkit chromium`) |
 | `npm run test:watch` | Re-run tests as you edit |
 | `npm run lint` | Run ESLint |
 | `npm run format` | Run Prettier |

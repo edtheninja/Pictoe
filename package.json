@@ -15,6 +15,7 @@
     "test": "vitest run",
     "bench": "PICTOE_BENCH=1 vitest run src/engine/image/colorStage.bench.test.ts",
     "e2e": "playwright test",
+    "e2e:devices": "PW_DEVICES=1 playwright test",
     "test:watch": "vitest"
   },
   "dependencies": {
