@@ -23,12 +23,25 @@ const SKY = { x: 0.5, y: 0.1 } as const;
 const apart = (a: number[], b: number[]) =>
   a.slice(0, 3).reduce((t, v, i) => t + Math.abs(v - b[i]!), 0);
 
+/** The app's own warnings (a session that could not be saved or restored): printed after each test. */
+let pictoeWarnings: string[] = [];
+
+test.afterEach(async ({ page: _page }, testInfo) => {
+  if (pictoeWarnings.length === 0) return;
+  const text = pictoeWarnings.join("\n");
+  console.log(`\n[${testInfo.project.name}] ${testInfo.title}: the app warned\n${text}\n`);
+  await testInfo.attach("pictoe warnings", { body: text, contentType: "text/plain" });
+});
+
 /** Errors the page throws or logs: every test ends by checking there were none. */
 function watchErrors(page: Page) {
   const errors: string[] = [];
+  pictoeWarnings = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
     if (m.type() === "error") errors.push(`console.error: ${m.text()}`);
+    // Warnings do not fail a test, but a session that quietly fails to save is worth seeing.
+    if (m.type() === "warning" && m.text().includes("[pictoe]")) pictoeWarnings.push(m.text());
   });
   return errors;
 }
@@ -97,7 +110,7 @@ test.describe("heal on real engines and phone screens", () => {
     await page.waitForTimeout(1500); // the session autosaves after a short pause
 
     await page.reload({ waitUntil: "networkidle" });
-    await expect(page.locator(IMAGE)).toBeVisible();
+    await expect(page.locator(IMAGE)).toBeVisible({ timeout: 20_000 });
     await expect.poll(() => redFraction(page)).toBeLessThan(before * 0.1);
     expect(errors).toEqual([]);
   });

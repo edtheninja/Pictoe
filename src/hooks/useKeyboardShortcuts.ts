@@ -1,15 +1,14 @@
 import { useEffect } from "react";
 import { useEditor } from "@/state/editor/EditorContext";
+import { isTextEntry } from "@/lib/isTextEntry";
 
 export function useKeyboardShortcuts() {
   const { undo, redo, setShowOriginal, setViewport, state } = useEditor();
 
   useEffect(() => {
-    const isTyping = (t: EventTarget | null) =>
-      t instanceof HTMLElement && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
-
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTyping(e.target)) return;
+      // Only where text is typed: a focused slider or checkbox must not swallow Ctrl/Cmd+Z.
+      if (isTextEntry(e.target as HTMLElement | null)) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key.toLowerCase() === "z") {
         e.preventDefault();

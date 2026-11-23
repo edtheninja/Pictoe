@@ -51,6 +51,19 @@ test.describe("heal mode", () => {
     await expect.poll(async () => await redFraction(page)).toBeGreaterThan(before * 0.9);
   });
 
+  test("Ctrl/Cmd+Z still undoes while the brush slider has keyboard focus", async ({ page }) => {
+    // A native slider is an <input>, but nothing is typed into it: it must not swallow the shortcut.
+    await openTestPhoto(page);
+    const before = await redFraction(page);
+    await openHeal(page);
+    await tapOnBlemish(page);
+    await expect.poll(async () => await redFraction(page)).toBeLessThan(before * 0.1);
+
+    await page.getByRole("slider", { name: "Brush size" }).focus();
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => await redFraction(page)).toBeGreaterThan(before * 0.9);
+  });
+
   test("a drag paints with one source and is one undo step", async ({ page }) => {
     await openTestPhoto(page);
     const before = await redFraction(page);

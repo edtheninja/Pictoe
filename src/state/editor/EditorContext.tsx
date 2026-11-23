@@ -152,9 +152,10 @@ export function EditorProvider({ children }: { children: ReactNode }) {
                   frameOf(source.width, source.height, restored.edit),
                 ),
         });
-      } catch {
+      } catch (error) {
         // Corrupt/unreadable saved session — fall back to the empty state
-        // rather than block the app.
+        // rather than block the app, but say so: a restore that quietly fails is hard to find.
+        console.warn("[pictoe] could not restore the saved session:", error);
       }
     })();
     return () => {
