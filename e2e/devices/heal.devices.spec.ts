@@ -33,13 +33,31 @@ test.afterEach(async ({ page: _page }, testInfo) => {
   await testInfo.attach("pictoe warnings", { body: text, contentType: "text/plain" });
 });
 
+/**
+ * A failed load of something from another site (the Inter web font, from Google Fonts) is the
+ * network's doing, not the app's: a TLS or DNS hiccup in the test environment shows up as a
+ * console error. The font has a fallback, so the page is fine without it. Failed loads from the
+ * app's own address still count, as does every other kind of error.
+ */
+function isThirdPartyLoadFailure(text: string, url: string): boolean {
+  if (!text.startsWith("Failed to load resource")) return false;
+  try {
+    const host = new URL(url).hostname;
+    return !["localhost", "127.0.0.1", "[::1]", "::1"].includes(host);
+  } catch {
+    return false; // no usable address: do not guess, count it
+  }
+}
+
 /** Errors the page throws or logs: every test ends by checking there were none. */
 function watchErrors(page: Page) {
   const errors: string[] = [];
   pictoeWarnings = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
-    if (m.type() === "error") errors.push(`console.error: ${m.text()}`);
+    if (m.type() === "error" && !isThirdPartyLoadFailure(m.text(), m.location().url)) {
+      errors.push(`console.error: ${m.text()}`);
+    }
     // Warnings do not fail a test, but a session that quietly fails to save is worth seeing.
     if (m.type() === "warning" && m.text().includes("[pictoe]")) pictoeWarnings.push(m.text());
   });
