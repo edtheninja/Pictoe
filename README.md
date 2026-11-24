@@ -151,7 +151,7 @@ The full plan, with effort and dependencies, is in [ROADMAP.md](./ROADMAP.md). T
 | **Stabilise** | Mostly done: docs refreshed, first tests added, masks cached, masks now follow crop/rotation/flip. Remaining: confirming the recent mask, Safari and touch work on real devices |
 | **M7 · Quality & reach** | Test suite and CI, cross-browser verification, pinch-zoom and touch gestures, move pixel work off the main thread, accessibility pass |
 | **M8 · Local editing depth** | Gradient and radial masks, mask management (rename, duplicate, reorder, invert), more per-area controls, full HSL, curves, colour grading, accurate tonal controls |
-| **M9 · Heal** | Clone-stamp and local spot-heal (automatic source, blended into the surroundings) built and unit-tested, stored as non-destructive strokes. Remaining: confirm the new Heal mode in browsers and on a touch device. Content-aware fill comes with the cloud engine (M11) |
+| **M9 · Heal** | Clone-stamp and local spot-heal (automatic source, blended into the surroundings) built and unit-tested, stored as non-destructive strokes. Tested on Chromium, WebKit and iPhone and Pixel profiles; still to do on a real device: a phone, and Heal on real photos. Content-aware fill comes with the cloud engine (M11) |
 | **M10 · Workflow & export** | Resolution scaling, filename and metadata options, copy edits between photos, batch apply and export, preset import/export, multi-image library |
 | **M11 · Cloud AI** | Object removal, generative expansion, sky and background replacement, subject isolation, AI-assisted heal, LLM-backed intent. All **suggest → preview → approve** |
 | **M12 · Ship** | Hosting, PWA/offline, privacy-friendly analytics, docs site |
