@@ -9,9 +9,16 @@ import {
 } from "./canvasFilter";
 import { createCanvas, get2dContext, type AnyCanvas, type AnyCtx2D } from "./canvasFactory";
 import { applyColorStage, planColorStage } from "./colorStage";
+import {
+  ORIGINAL_SIZE,
+  resolveExportSize,
+  type ResolvedSize,
+  type SizeSetting,
+} from "./exportSize";
 import { exportWithFallback, type ExportResult } from "./exportFallback";
 import { healedSource } from "./healedSource";
 import { MaskCache } from "./maskCache";
+import { scaledSize } from "./outputScale";
 import { buildLocalFilterParams, localStageAdjustments } from "./localAdjustments";
 import { layerHasEffect, linearToPixels, radialToPixels } from "./maskShapes";
 import { timed } from "./profile";
@@ -343,11 +350,7 @@ function renderPipeline(
   const drawSource = edit.healStrokes?.length
     ? healedSource.get(source, srcW, srcH, edit.healStrokes)
     : source;
-  let scale = 1;
-  if (maxDimension) scale = Math.min(1, maxDimension / Math.max(out.width, out.height));
-
-  const w = Math.max(1, Math.round(out.width * scale));
-  const h = Math.max(1, Math.round(out.height * scale));
+  const { width: w, height: h, scale } = scaledSize(out.width, out.height, maxDimension);
   target.width = w;
   target.height = h;
 
@@ -422,30 +425,38 @@ export async function exportImageSafely(
   format: string,
   quality: number,
   maskLayers?: MaskLayer[],
-): Promise<ExportResult & { full: { width: number; height: number } }> {
+  size: SizeSetting = ORIGINAL_SIZE,
+): Promise<ExportResult & { full: { width: number; height: number }; requested: ResolvedSize }> {
   const full = outputSize(srcW, srcH, edit);
-  const result = await exportWithFallback(full.width, full.height, async (maxDimension) => {
-    const canvas = document.createElement("canvas");
-    try {
-      const { width, height } = renderImage(
-        source,
-        srcW,
-        srcH,
-        edit,
-        canvas,
-        maxDimension,
-        maskLayers,
-      );
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, format, quality),
-      );
-      return { blob, width, height };
-    } finally {
-      canvas.width = 0; // give the pixel memory back before a smaller retry
-      canvas.height = 0;
-    }
-  });
-  return { ...result, full };
+  // The size asked for. The browser-limit fallback steps down from here, not from the full size,
+  // so a file is only ever "scaled" (smaller than asked) when the browser could not make it.
+  const requested = resolveExportSize(size, full.width, full.height);
+  const result = await exportWithFallback(
+    requested.width,
+    requested.height,
+    async (maxDimension) => {
+      const canvas = document.createElement("canvas");
+      try {
+        const { width, height } = renderImage(
+          source,
+          srcW,
+          srcH,
+          edit,
+          canvas,
+          maxDimension,
+          maskLayers,
+        );
+        const blob = await new Promise<Blob | null>((resolve) =>
+          canvas.toBlob(resolve, format, quality),
+        );
+        return { blob, width, height };
+      } finally {
+        canvas.width = 0; // give the pixel memory back before a smaller retry
+        canvas.height = 0;
+      }
+    },
+  );
+  return { ...result, full, requested };
 }
 
 export async function exportImage(

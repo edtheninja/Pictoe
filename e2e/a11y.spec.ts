@@ -69,6 +69,9 @@ for (const vp of sizes) {
       await page.getByRole("button", { name: "Export" }).click();
       await expect(page.getByRole("dialog", { name: "Export options" })).toBeVisible();
       found.push(...(await violations(page, "export popover")));
+      // And with the custom size fields showing.
+      await page.getByRole("radio", { name: "Custom", exact: true }).click();
+      found.push(...(await violations(page, "export popover (custom size)")));
       expect(found).toEqual([]);
     });
   });

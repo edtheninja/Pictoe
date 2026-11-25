@@ -35,7 +35,7 @@ Type what you want (*"make it warmer"*, *"add drama"*). Pictoe **proposes** a sp
 - Requests that need a cloud engine (object removal, sky replacement, generative expansion, subject isolation) are **recognised and clearly labelled as unavailable**. Pictoe does not pretend to do them.
 
 ### Export
-JPG, PNG or WebP. For JPG and WebP, choose High / Medium / Small or set a custom 1–100% quality. Local areas are included in the exported image. Safari can't save WebP from a canvas, so Pictoe detects that and disables the WebP option there, and a saved file always has the extension of its real format.
+JPG, PNG or WebP. For JPG and WebP, choose High / Medium / Small or set a custom 1–100% quality. Choose the size too: the original, 75%, 50% or 25%, or a custom longest side in pixels (or a percent), with a live readout of the exact size that will be saved. Pictoe never enlarges a photo. Local areas are included in the exported image. Safari can't save WebP from a canvas, so Pictoe detects that and disables the WebP option there, and a saved file always has the extension of its real format.
 
 ---
 
@@ -94,7 +94,7 @@ Engine          pure TypeScript, no React
 
 **Design rules**
 - The original image is immutable.
-- The preview and the export use the same pipeline, so what you see is what you get. The preview is downscaled to what the screen can show; export uses full resolution.
+- The preview and the export use the same pipeline, so what you see is what you get. The preview is downscaled to what the screen can show; export uses full resolution unless you choose a smaller size.
 - Local areas are stored as **resolution-independent brush strokes**, so a mask painted on a small preview lines up exactly at export size. They are stored relative to the original image, so they stay on the same part of the picture when you crop, rotate or flip.
 - No image-processing logic lives in UI components.
 
