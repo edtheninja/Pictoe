@@ -68,3 +68,27 @@ export async function deletePreset(id: string): Promise<void> {
     // ignore
   }
 }
+
+/**
+ * Saves several presets in one go (an import). Unlike the single-preset calls it says whether it
+ * worked, because an import reports what it did and must not claim a save that didn't happen.
+ * All or nothing: one transaction.
+ */
+export async function savePresets(presets: readonly StoredPreset[]): Promise<boolean> {
+  if (presets.length === 0) return true;
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      for (const preset of presets) store.put(preset);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+    db.close();
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -1,7 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useEditor } from "@/state/editor/EditorContext";
-import { listPresets, savePreset, deletePreset, type StoredPreset } from "@/engine/storage/presets";
+import {
+  listPresets,
+  savePreset,
+  savePresets,
+  deletePreset,
+  type StoredPreset,
+} from "@/engine/storage/presets";
+import {
+  MAX_PRESET_FILE_BYTES,
+  describeImport,
+  describeParseFailure,
+  parsePresetFile,
+  planImport,
+  presetFileName,
+  serializePresets,
+} from "@/engine/storage/presetFile";
 import { BUILTIN_PRESETS } from "./builtinPresets";
 import { DEFAULT_ADJUSTMENTS } from "@/types/editor";
 import { copyLook, describeLook, isPlainLook, sameLook } from "@/engine/image/editClipboard";
@@ -11,6 +26,8 @@ export function PresetsPanel() {
   const [userPresets, setUserPresets] = useState<StoredPreset[]>([]);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
+  const [fileNote, setFileNote] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     listPresets().then(setUserPresets);
@@ -32,6 +49,45 @@ export function PresetsPanel() {
     setUserPresets((prev) => [...prev, preset]);
     setName("");
     setNaming(false);
+  };
+
+  const exportPresets = () => {
+    const blob = new Blob([serializePresets(userPresets)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = presetFileName();
+    a.click();
+    URL.revokeObjectURL(url);
+    const n = userPresets.length;
+    setFileNote(`Saved ${n} ${n === 1 ? "preset" : "presets"} to ${a.download}.`);
+  };
+
+  const importFile = async (file: File) => {
+    if (file.size > MAX_PRESET_FILE_BYTES) {
+      setFileNote(describeParseFailure("too-big"));
+      return;
+    }
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      setFileNote("Pictoe couldn't read that file.");
+      return;
+    }
+    const parsed = parsePresetFile(text);
+    if (!parsed.ok) {
+      setFileNote(describeParseFailure(parsed.reason));
+      return;
+    }
+    // Compare against what is saved right now, not what this panel last saw.
+    const plan = planImport(await listPresets(), parsed.presets);
+    if (!(await savePresets(plan.toAdd))) {
+      setFileNote("Pictoe couldn't save these presets in this browser.");
+      return;
+    }
+    setUserPresets(await listPresets());
+    setFileNote(describeImport(plan, parsed.skipped, parsed.fromNewerVersion));
   };
 
   const remove = async (id: string) => {
@@ -161,6 +217,44 @@ export function PresetsPanel() {
           >
             Save current as preset
           </button>
+        )}
+      </div>
+
+      <div>
+        <div className="flex items-center gap-md">
+          <button
+            type="button"
+            onClick={exportPresets}
+            disabled={userPresets.length === 0}
+            className="text-[12px] text-text-secondary transition-colors duration-150 hover:text-text-primary disabled:cursor-not-allowed disabled:text-text-muted"
+          >
+            Export presets
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            className="text-[12px] text-text-secondary transition-colors duration-150 hover:text-text-primary"
+          >
+            Import presets
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept=".json,application/json"
+            aria-label="Import presets file"
+            className="sr-only"
+            tabIndex={-1}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = ""; // so choosing the same file again still counts
+              if (file) void importFile(file);
+            }}
+          />
+        </div>
+        {fileNote && (
+          <p role="status" className="mt-xs text-[12px] text-text-muted">
+            {fileNote}
+          </p>
         )}
       </div>
     </div>
