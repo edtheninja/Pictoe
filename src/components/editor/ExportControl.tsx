@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
 import { useEditor } from "@/state/editor/EditorContext";
 import { exportImageSafely, outputSize } from "@/engine/image/render";
 import { describeScaledExport } from "@/engine/image/exportFallback";
+import {
+  DEFAULT_TEMPLATE,
+  TEMPLATE_TOKENS,
+  buildFilename,
+  findUnknownTokens,
+  loadTemplate,
+  saveTemplate,
+} from "@/engine/image/exportFilename";
 import { canEncode, resolveExportOutcome } from "@/engine/image/exportFormat";
 import {
   ORIGINAL_SIZE,
@@ -52,6 +60,10 @@ export function ExportControl() {
   // Which formats this browser can really save (Safari can't encode WebP). Unknown until probed.
   const [encodable, setEncodable] = useState<Record<string, boolean>>({});
   const [notice, setNotice] = useState<string | null>(null);
+  // How the saved file is named. Remembered between visits; the extension is never part of it.
+  const [template, setTemplate] = useState(loadTemplate);
+  const [showTokens, setShowTokens] = useState(false);
+  const templateInput = useRef<HTMLInputElement>(null);
   const busy = state.processing === "exporting";
 
   const quality =
@@ -79,6 +91,37 @@ export function ExportControl() {
   }, [sizeChoice, customLead, customPixels, customPercent]);
   const resolved =
     full && sizeSetting ? resolveExportSize(sizeSetting, full.width, full.height) : null;
+
+  const changeTemplate = (text: string) => {
+    setTemplate(text);
+    saveTemplate(text);
+    setNotice(null);
+  };
+  /** Adds a token where the cursor is (or at the end), then puts the cursor after it. */
+  const insertToken = (token: string) => {
+    const input = templateInput.current;
+    const at = input?.selectionStart ?? template.length;
+    const to = input?.selectionEnd ?? at;
+    const text = `${template.slice(0, at)}{${token}}${template.slice(to)}`;
+    changeTemplate(text);
+    const caret = at + token.length + 2;
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(caret, caret);
+    });
+  };
+  const unknownTokens = findUnknownTokens(template);
+  const selectedFormat = FORMATS.find((f) => f.value === format)!;
+  // What the name will look like. Uses the size asked for; the saved name uses the size written.
+  const previewName =
+    state.source && (resolved ?? full)
+      ? buildFilename(template, {
+          originalName: state.source.name,
+          width: (resolved ?? full)!.width,
+          height: (resolved ?? full)!.height,
+          extension: selectedFormat.ext,
+        })
+      : null;
 
   const chooseSize = (choice: SizeChoice) => {
     setSizeChoice(choice);
@@ -137,11 +180,16 @@ export function ExportControl() {
       const { blob } = result;
       // Name the file after what the browser actually produced, not just what was asked for.
       const outcome = resolveExportOutcome(format, blob);
-      const base = state.source.name.replace(/\.[^.]+$/, "");
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${base}-pictoe.${outcome.extension}`;
+      // Named from the size actually written, which is smaller than asked if the browser had to step down.
+      a.download = buildFilename(template, {
+        originalName: state.source.name,
+        width: result.width,
+        height: result.height,
+        extension: outcome.extension,
+      });
       a.click();
       URL.revokeObjectURL(url);
       setProcessing("idle");
@@ -303,6 +351,68 @@ export function ExportControl() {
               <span className="mt-xs block text-text-muted">{describeSizeNote(resolved.note)}</span>
             )}
           </p>
+
+          <p className="mb-sm text-[12px] uppercase tracking-[0.14em] text-text-muted">File name</p>
+          <input
+            ref={templateInput}
+            type="text"
+            value={template}
+            onChange={(e) => changeTemplate(e.target.value)}
+            maxLength={120}
+            spellCheck={false}
+            autoCapitalize="off"
+            autoCorrect="off"
+            aria-label="File name"
+            aria-describedby="export-filename-preview"
+            className="mb-xs w-full rounded-md border border-border bg-surface px-sm py-1.5 text-[13px] text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
+          <p
+            id="export-filename-preview"
+            role="status"
+            className="mb-sm break-all text-[12px] text-text-secondary"
+          >
+            {previewName ? `Saves as ${previewName}` : null}
+          </p>
+          {unknownTokens.length > 0 && (
+            <p className="mb-sm text-[12px] text-text-muted">
+              {unknownTokens.join(", ")} {unknownTokens.length === 1 ? "isn't" : "aren't"} a known
+              option, so {unknownTokens.length === 1 ? "it" : "they"} will stay in the name as
+              typed.
+            </p>
+          )}
+          <div className="mb-lg flex items-center gap-sm">
+            <button
+              type="button"
+              onClick={() => setShowTokens((v) => !v)}
+              aria-expanded={showTokens}
+              className="text-[12px] text-text-muted transition-colors duration-150 hover:text-text-primary"
+            >
+              {showTokens ? "Hide options" : "Options"}
+            </button>
+            {template !== DEFAULT_TEMPLATE && (
+              <button
+                type="button"
+                onClick={() => changeTemplate(DEFAULT_TEMPLATE)}
+                className="text-[12px] text-text-muted transition-colors duration-150 hover:text-text-primary"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+          {showTokens && (
+            <div className="-mt-sm mb-lg flex flex-wrap gap-xs" aria-label="File name options">
+              {TEMPLATE_TOKENS.map((token) => (
+                <button
+                  key={token}
+                  type="button"
+                  onClick={() => insertToken(token)}
+                  className="rounded-md border border-border px-sm py-1 text-[11px] text-text-secondary transition-colors duration-150 hover:text-text-primary"
+                >
+                  {token}
+                </button>
+              ))}
+            </div>
+          )}
 
           <button
             type="button"
