@@ -11,7 +11,7 @@ export const IMAGE = 'canvas[aria-label*="image"]';
  * default 800 x 600 the red circle is 40 px in radius and the green square 60 px wide; a larger
  * photo scales both, so the picture looks the same and fractions still point at the same things.
  */
-async function makePng(page: Page, width = 800, height = 600): Promise<Buffer> {
+export async function makePng(page: Page, width = 800, height = 600): Promise<Buffer> {
   const base64 = await page.evaluate(
     ({ blemish, source, width, height }) => {
       const k = width / 800;

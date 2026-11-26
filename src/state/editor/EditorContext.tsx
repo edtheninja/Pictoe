@@ -6,6 +6,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import type { ReactNode } from "react";
 import {
@@ -28,6 +29,15 @@ import { analyzeImage } from "@/engine/image/analyze";
 import { saveSession, loadSession, clearSession } from "@/engine/storage/session";
 import { normalizeSession } from "@/engine/storage/sessionSchema";
 import { frameOf, migrateLegacyLayers } from "@/engine/image/maskSpace";
+import {
+  copyLook,
+  isPlainLook,
+  loadLook,
+  pasteLook,
+  sameLook,
+  saveLook,
+  type CopiedLook,
+} from "@/engine/image/editClipboard";
 
 type EditorApi = {
   state: EditorState;
@@ -50,6 +60,12 @@ type EditorApi = {
   /** Like applyEdit but records no history; wrap a gesture in begin/endInteraction to record it as one step. */
   applyEditLive: (edit: Partial<EditState>) => void;
   applyAdjustments: (patch: Partial<Record<AdjustmentKey, number>>) => void;
+  /** The look (adjustments and curves) last copied from a photo; kept when you open another. */
+  copiedLook: CopiedLook | null;
+  /** Copies this photo's look. Does nothing when there is nothing to copy. */
+  copyEdits: () => void;
+  /** Pastes the copied look onto this photo as one undo step. Crop, healing and local areas stay. */
+  pasteEdits: () => void;
   undo: () => void;
   redo: () => void;
   jumpToHistory: (index: number) => void;
@@ -93,6 +109,14 @@ export function EditorProvider({ children }: { children: ReactNode }) {
   const snapshotRef = useRef<EditState | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
+  // Lives above the photo, so it survives closing one photo and opening the next. Read from
+  // storage after mount (not in the initial state) so the server and first client render agree.
+  const [copiedLook, setCopiedLook] = useState<CopiedLook | null>(null);
+  const copiedLookRef = useRef(copiedLook);
+  copiedLookRef.current = copiedLook;
+  useEffect(() => {
+    setCopiedLook(loadLook());
+  }, []);
 
   const beginInteraction = useCallback(() => {
     snapshotRef.current = stateRef.current.edit;
@@ -220,6 +244,20 @@ export function EditorProvider({ children }: { children: ReactNode }) {
             adjustments: { ...stateRef.current.edit.adjustments, ...patch },
           },
         }),
+      copiedLook,
+      copyEdits: () => {
+        const look = copyLook(stateRef.current.edit);
+        if (!stateRef.current.source || isPlainLook(look)) return;
+        setCopiedLook(look);
+        saveLook(look);
+      },
+      pasteEdits: () => {
+        const look = copiedLookRef.current;
+        const { source, edit } = stateRef.current;
+        // A paste that would change nothing records no history step.
+        if (!look || !source || sameLook(copyLook(edit), look)) return;
+        dispatch({ type: "applyEdit", edit: pasteLook(look) });
+      },
       undo: () =>
         dispatch({
           type: stateRef.current.activeTool === "mask" ? "undoMask" : "undo",
@@ -261,7 +299,7 @@ export function EditorProvider({ children }: { children: ReactNode }) {
       setHealSource: (source) => dispatch({ type: "setHealSource", source }),
       setHealOffset: (offset) => dispatch({ type: "setHealOffset", offset }),
     }),
-    [state, beginInteraction, endInteraction, cancelInteraction],
+    [state, copiedLook, beginInteraction, endInteraction, cancelInteraction],
   );
 
   return <EditorContext.Provider value={api}>{children}</EditorContext.Provider>;

@@ -4,9 +4,10 @@ import { useEditor } from "@/state/editor/EditorContext";
 import { listPresets, savePreset, deletePreset, type StoredPreset } from "@/engine/storage/presets";
 import { BUILTIN_PRESETS } from "./builtinPresets";
 import { DEFAULT_ADJUSTMENTS } from "@/types/editor";
+import { copyLook, describeLook, isPlainLook, sameLook } from "@/engine/image/editClipboard";
 
 export function PresetsPanel() {
-  const { state, isEdited, applyEdit } = useEditor();
+  const { state, isEdited, applyEdit, copiedLook, copyEdits, pasteEdits } = useEditor();
   const [userPresets, setUserPresets] = useState<StoredPreset[]>([]);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
@@ -38,8 +39,39 @@ export function PresetsPanel() {
     setUserPresets((prev) => prev.filter((p) => p.id !== id));
   };
 
+  const canCopy = !isPlainLook(copyLook(state.edit));
+  // Pasting what this photo already has would change nothing, so it is not offered.
+  const canPaste = copiedLook !== null && !sameLook(copyLook(state.edit), copiedLook);
+
   return (
     <div className="flex flex-col gap-md">
+      <div>
+        <p className="mb-xs text-[11px] uppercase tracking-[0.12em] text-text-muted">Copy edits</p>
+        <div className="flex gap-xs">
+          <button
+            type="button"
+            onClick={copyEdits}
+            disabled={!canCopy}
+            className="flex-1 rounded-md border border-border px-sm py-1.5 text-[12px] text-text-secondary transition-colors duration-150 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-text-secondary"
+          >
+            Copy edits
+          </button>
+          <button
+            type="button"
+            onClick={pasteEdits}
+            disabled={!canPaste}
+            className="flex-1 rounded-md border border-border px-sm py-1.5 text-[12px] text-text-secondary transition-colors duration-150 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:text-text-secondary"
+          >
+            Paste edits
+          </button>
+        </div>
+        <p role="status" className="mt-xs text-[12px] text-text-muted">
+          {copiedLook
+            ? `Copied: ${describeLook(copiedLook)}. Crop, healing and local areas stay with each photo.`
+            : "Copy this photo's look to paste it onto another."}
+        </p>
+      </div>
+
       <div>
         <p className="mb-xs text-[11px] uppercase tracking-[0.12em] text-text-muted">Built-in</p>
         <div className="flex flex-wrap gap-xs">
