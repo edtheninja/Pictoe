@@ -14,6 +14,13 @@ import {
 } from "@/engine/image/exportFilename";
 import { canEncode, resolveExportOutcome } from "@/engine/image/exportFormat";
 import {
+  photoInfoChoice,
+  photoInfoExportOptions,
+  readPhotoInfo,
+  withPhotoInfo,
+  type PhotoInfo,
+} from "@/engine/image/photoInfo";
+import {
   ORIGINAL_SIZE,
   describeSizeNote,
   parseWholeNumber,
@@ -64,6 +71,26 @@ export function ExportControl() {
   const [template, setTemplate] = useState(loadTemplate);
   const [showTokens, setShowTokens] = useState(false);
   const templateInput = useRef<HTMLInputElement>(null);
+  // Photo info (camera, date, and optionally location) from the original file. Off unless asked:
+  // exports carry no metadata by default. Neither switch is remembered between visits, and the
+  // location switch is turned off again for every new photo. undefined = still reading the file.
+  const [photoInfo, setPhotoInfo] = useState<PhotoInfo | null | undefined>(undefined);
+  const [keepInfo, setKeepInfo] = useState(false);
+  const [keepLocation, setKeepLocation] = useState(false);
+  const sourceBlob = state.source?.blob;
+  useEffect(() => {
+    setPhotoInfo(undefined);
+    setKeepLocation(false);
+    if (!sourceBlob) return;
+    let alive = true;
+    readPhotoInfo(sourceBlob).then((info) => {
+      if (alive) setPhotoInfo(info);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [sourceBlob]);
+  const infoChoice = photoInfoChoice(format, photoInfo);
   const busy = state.processing === "exporting";
 
   const quality =
@@ -177,9 +204,25 @@ export function ExportControl() {
         state.maskLayers,
         sizeSetting,
       );
-      const { blob } = result;
+      const { blob: encoded } = result;
       // Name the file after what the browser actually produced, not just what was asked for.
-      const outcome = resolveExportOutcome(format, blob);
+      const outcome = resolveExportOutcome(format, encoded);
+      // Photo info goes only into a real JPEG, sized as written. If it can't be added, the file
+      // is still saved, without it, and the note says so.
+      let blob = encoded;
+      let infoNote: string | null = null;
+      const infoOptions =
+        outcome.extension === "jpg"
+          ? photoInfoExportOptions(keepInfo, keepLocation, photoInfo, {
+              width: result.width,
+              height: result.height,
+            })
+          : null;
+      if (infoOptions && photoInfo) {
+        blob = await withPhotoInfo(encoded, photoInfo, infoOptions);
+        if (blob === encoded)
+          infoNote = "Pictoe couldn't add the photo info, so it saved the file without it.";
+      }
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -195,6 +238,7 @@ export function ExportControl() {
       setProcessing("idle");
       const notes = [
         outcome.message,
+        infoNote,
         result.scaled ? describeScaledExport(result.requested, result) : null,
       ].filter(Boolean);
       if (notes.length > 0) {
@@ -411,6 +455,55 @@ export function ExportControl() {
                   {token}
                 </button>
               ))}
+            </div>
+          )}
+
+          <p className="mb-sm text-[12px] uppercase tracking-[0.14em] text-text-muted">
+            Photo info
+          </p>
+          {infoChoice.kind === "unavailable" ? (
+            <p className="mb-lg text-[12px] text-text-muted">{infoChoice.reason}</p>
+          ) : (
+            <div className="mb-lg flex flex-col gap-xs">
+              <label className="flex items-start gap-sm text-[13px] text-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={keepInfo}
+                  onChange={(e) => {
+                    setKeepInfo(e.target.checked);
+                    // Turning the info off also turns location off, so it can't come back on by itself.
+                    if (!e.target.checked) setKeepLocation(false);
+                  }}
+                  className="mt-0.5 h-4 w-4 accent-accent"
+                />
+                <span>
+                  Keep photo info
+                  <span className="block text-[12px] text-text-muted">
+                    {infoChoice.summary}. Off by default: exports carry none.
+                  </span>
+                </span>
+              </label>
+              {infoChoice.hasLocation && (
+                <label
+                  className={`ml-6 flex items-start gap-sm text-[13px] ${
+                    keepInfo ? "text-text-secondary" : "text-text-muted"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={keepInfo && keepLocation}
+                    disabled={!keepInfo}
+                    onChange={(e) => setKeepLocation(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-accent"
+                  />
+                  <span>
+                    Include location
+                    <span className="block text-[12px] text-text-muted">
+                      This photo records where it was taken. Anyone with the file can see it.
+                    </span>
+                  </span>
+                </label>
+              )}
             </div>
           )}
 
