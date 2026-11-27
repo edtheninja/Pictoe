@@ -18,7 +18,7 @@ import {
   serializePresets,
 } from "@/engine/storage/presetFile";
 import { BUILTIN_PRESETS } from "./builtinPresets";
-import { DEFAULT_ADJUSTMENTS } from "@/types/editor";
+import { presetEdit, presetFromEdit } from "./presetLook";
 import { copyLook, describeLook, isPlainLook, sameLook } from "@/engine/image/editClipboard";
 
 export function PresetsPanel() {
@@ -33,18 +33,14 @@ export function PresetsPanel() {
     listPresets().then(setUserPresets);
   }, []);
 
-  const apply = (adjustments: Record<string, number | undefined>) => {
-    applyEdit({ adjustments: { ...DEFAULT_ADJUSTMENTS, ...adjustments } });
+  const apply = (preset: Pick<StoredPreset, "adjustments" | "curves">) => {
+    applyEdit(presetEdit(preset));
   };
 
   const saveCurrent = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const preset: StoredPreset = {
-      id: crypto.randomUUID(),
-      name: trimmed,
-      adjustments: { ...state.edit.adjustments },
-    };
+    const preset: StoredPreset = presetFromEdit(crypto.randomUUID(), trimmed, state.edit);
     await savePreset(preset);
     setUserPresets((prev) => [...prev, preset]);
     setName("");
@@ -135,7 +131,7 @@ export function PresetsPanel() {
             <button
               key={p.id}
               type="button"
-              onClick={() => apply(p.adjustments)}
+              onClick={() => apply(p)}
               className="rounded-full border border-border px-md py-1 text-[12px] text-text-secondary transition-colors duration-150 hover:border-accent hover:text-accent"
             >
               {p.name}
@@ -157,7 +153,8 @@ export function PresetsPanel() {
             >
               <button
                 type="button"
-                onClick={() => apply(p.adjustments)}
+                onClick={() => apply(p)}
+                title={p.curves ? "Includes tone curves" : undefined}
                 className="transition-colors duration-150 hover:text-accent"
               >
                 {p.name}

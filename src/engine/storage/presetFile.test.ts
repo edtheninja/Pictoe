@@ -15,7 +15,7 @@ import {
   serializePresets,
   type PresetDraft,
 } from "./presetFile";
-import { DEFAULT_ADJUSTMENTS } from "@/types/editor";
+import { DEFAULT_ADJUSTMENTS, identityCurves, type CurvesState } from "@/types/editor";
 import type { StoredPreset } from "./presets";
 
 const stored = (
@@ -145,6 +145,122 @@ describe("serializePresets / parsePresetFile", () => {
     if (!parsed.ok) throw new Error("expected ok");
     expect(parsed.presets[0]!.adjustments.exposure).toBe(0);
     expect(({} as Record<string, unknown>)["exposure"]).toBeUndefined();
+  });
+});
+
+const bent = (): CurvesState => ({
+  rgb: [
+    { x: 0, y: 0 },
+    { x: 0.5, y: 0.7 },
+    { x: 1, y: 1 },
+  ],
+  luma: [
+    { x: 0, y: 0 },
+    { x: 1, y: 1 },
+  ],
+});
+
+describe("version 2: presets with curves", () => {
+  it("is written as version 2", () => {
+    expect(PRESET_FILE_VERSION).toBe(2);
+    expect(JSON.parse(serializePresets([stored("A", {})])).version).toBe(2);
+  });
+
+  it("round-trips curves", () => {
+    const parsed = parsePresetFile(
+      serializePresets([{ ...stored("A", { exposure: 4 }), curves: bent() }]),
+    );
+    if (!parsed.ok) throw new Error("expected ok");
+    expect(parsed.presets[0]!.curves).toEqual(bent());
+    expect(parsed.fromNewerVersion).toBe(false);
+  });
+
+  it("writes straight curves too: straight is not the same as no curves", () => {
+    const text = serializePresets([{ ...stored("Flat", {}), curves: identityCurves() }]);
+    expect(JSON.parse(text).presets[0].curves).toEqual(identityCurves());
+    const parsed = parsePresetFile(text);
+    if (!parsed.ok) throw new Error("expected ok");
+    expect(parsed.presets[0]!.curves).toEqual(identityCurves());
+  });
+
+  it("writes no curves key for a preset that has none", () => {
+    const out = JSON.parse(serializePresets([stored("A", { exposure: 1 })]));
+    expect(out.presets[0]).not.toHaveProperty("curves");
+    const parsed = parsePresetFile(serializePresets([stored("A", { exposure: 1 })]));
+    if (!parsed.ok) throw new Error("expected ok");
+    expect(parsed.presets[0]).not.toHaveProperty("curves");
+  });
+
+  it("still reads a version 1 file: its presets have no curves", () => {
+    const v1 = JSON.stringify({
+      format: PRESET_FILE_FORMAT,
+      version: 1,
+      presets: [{ name: "Old", adjustments: { exposure: 5 } }],
+    });
+    const parsed = parsePresetFile(v1);
+    if (!parsed.ok) throw new Error("expected ok");
+    expect(parsed.presets[0]!.adjustments.exposure).toBe(5);
+    expect(parsed.presets[0]).not.toHaveProperty("curves");
+    expect(parsed.fromNewerVersion).toBe(false);
+  });
+
+  it("treats curves that are not an object as no curves, never as straight ones", () => {
+    for (const bad of [5, "x", [1, 2], null, true]) {
+      const parsed = parsePresetFile(file([{ name: "A", adjustments: {}, curves: bad }]));
+      if (!parsed.ok) throw new Error("expected ok");
+      expect(parsed.presets[0]).not.toHaveProperty("curves");
+    }
+  });
+
+  it("repairs damaged curve points", () => {
+    const parsed = parsePresetFile(
+      file([
+        { name: "A", adjustments: {}, curves: { rgb: [{ x: -3, y: 9 }, "x", { x: 4, y: -1 }] } },
+      ]),
+    );
+    if (!parsed.ok) throw new Error("expected ok");
+    for (const p of [...parsed.presets[0]!.curves!.rgb, ...parsed.presets[0]!.curves!.luma]) {
+      expect(p.x).toBeGreaterThanOrEqual(0);
+      expect(p.x).toBeLessThanOrEqual(1);
+      expect(p.y).toBeGreaterThanOrEqual(0);
+      expect(p.y).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("carries curves through an import, and compares them when deduplicating", () => {
+    const withCurves = { ...draft("A", { exposure: 1 }), curves: bent() };
+    const first = planImport([], [withCurves], ids());
+    expect(first.toAdd[0]!.curves).toEqual(bent());
+
+    // identical, curves included: skipped
+    expect(planImport(first.toAdd, [withCurves], ids()).duplicates).toBe(1);
+
+    // same name and adjustments but different curves: a different preset, kept under a free name
+    const other = { ...withCurves, curves: identityCurves() };
+    const plan = planImport(first.toAdd, [other], ids());
+    expect(plan.duplicates).toBe(0);
+    expect(plan.toAdd.map((p) => p.name)).toEqual(["A 2"]);
+
+    // no curves is not the same as straight curves
+    const without = draft("A", { exposure: 1 });
+    expect(planImport(first.toAdd, [without], ids()).duplicates).toBe(0);
+    const straight = { ...without, curves: identityCurves() };
+    const savedStraight = planImport([], [straight], ids()).toAdd;
+    expect(planImport(savedStraight, [without], ids()).duplicates).toBe(0);
+    expect(planImport(savedStraight, [straight], ids()).duplicates).toBe(1);
+  });
+
+  it("an old saved preset (no curves) and the same preset imported from a v1 file are duplicates", () => {
+    const saved = [stored("Old", { exposure: 5 })];
+    const v1 = parsePresetFile(
+      JSON.stringify({
+        format: PRESET_FILE_FORMAT,
+        version: 1,
+        presets: [{ name: "Old", adjustments: { exposure: 5 } }],
+      }),
+    );
+    if (!v1.ok) throw new Error("expected ok");
+    expect(planImport(saved, v1.presets, ids()).duplicates).toBe(1);
   });
 });
 

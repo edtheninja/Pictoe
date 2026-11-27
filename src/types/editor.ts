@@ -142,6 +142,12 @@ export type Preset = {
   id: string;
   name: string;
   adjustments: PresetAdjustments;
+  /**
+   * The tone curves the preset sets. Absent means the preset does not define curves, and applying
+   * it leaves the photo's curves as they are (every built-in preset, and every preset saved before
+   * curves were added). Present, even if straight, means applying it replaces the curves.
+   */
+  curves?: CurvesState;
   builtin?: boolean;
 };
 

@@ -1,4 +1,4 @@
-import type { PresetAdjustments } from "@/types/editor";
+import type { CurvesState, PresetAdjustments } from "@/types/editor";
 
 const DB_NAME = "pictoe-presets";
 const DB_VERSION = 1;
@@ -8,6 +8,8 @@ export type StoredPreset = {
   id: string;
   name: string;
   adjustments: PresetAdjustments;
+  /** See Preset.curves: absent for presets saved before curves were part of a preset. */
+  curves?: CurvesState;
 };
 
 function openDb(): Promise<IDBDatabase> {

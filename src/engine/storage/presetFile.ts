@@ -3,8 +3,10 @@
  *
  * A file is the one place presets arrive from outside, so nothing in it is trusted: it may be
  * from an older or newer Pictoe, hand-edited, damaged, or not a preset file at all. Rules:
- * - Only values that differ from "untouched" are written, so a file stays small and still means
- *   the same thing when a later Pictoe adds adjustments.
+ * - Only adjustments that differ from "untouched" are written, so a file stays small and still
+ *   means the same thing when a later Pictoe adds adjustments.
+ * - Curves are written whenever a preset has them, straight ones too: "these curves are straight"
+ *   (applying resets them) is different from "no curves" (applying leaves them alone).
  * - Reading repairs rather than rejects: unknown adjustments are dropped, values are clamped to
  *   their slider range, names are cleaned. A preset that can't be repaired is skipped and counted.
  * - A file's ids are never used. Every imported preset gets a new id, so an import can't overwrite
@@ -14,12 +16,22 @@
  *
  * Pure: no React, no DOM. presets.ts does the saving; the panel does the file picking.
  */
-import { DEFAULT_ADJUSTMENTS, type Adjustments, type AdjustmentKey } from "@/types/editor";
+import {
+  DEFAULT_ADJUSTMENTS,
+  type Adjustments,
+  type AdjustmentKey,
+  type CurvesState,
+} from "@/types/editor";
+import { normalizeCurves } from "@/engine/image/curves";
 import { normalizeAdjustments } from "@/engine/storage/sessionSchema";
 import type { StoredPreset } from "@/engine/storage/presets";
 
 export const PRESET_FILE_FORMAT = "pictoe-presets";
-export const PRESET_FILE_VERSION = 1;
+/**
+ * 1: name and adjustments. 2: a preset may also carry tone curves. A version 1 file still reads
+ * (its presets simply have no curves), and a file that carries curves is always written as 2.
+ */
+export const PRESET_FILE_VERSION = 2;
 
 /** Generous for anyone's real collection; stops a huge or hostile file from being worked through. */
 export const MAX_PRESET_FILE_BYTES = 1_000_000;
@@ -45,12 +57,18 @@ function changedOnly(adjustments: Partial<Adjustments>): Partial<Adjustments> {
 }
 
 /** The text of a preset file for these presets. */
-export function serializePresets(presets: readonly Pick<StoredPreset, "name" | "adjustments">[]) {
+export function serializePresets(
+  presets: readonly Pick<StoredPreset, "name" | "adjustments" | "curves">[],
+) {
   return JSON.stringify(
     {
       format: PRESET_FILE_FORMAT,
       version: PRESET_FILE_VERSION,
-      presets: presets.map((p) => ({ name: p.name, adjustments: changedOnly(p.adjustments) })),
+      presets: presets.map((p) => ({
+        name: p.name,
+        adjustments: changedOnly(p.adjustments),
+        ...(p.curves ? { curves: normalizeCurves(p.curves) } : {}),
+      })),
     },
     null,
     2,
@@ -78,7 +96,8 @@ export function cleanPresetName(raw: unknown): string {
   return cut || FALLBACK_PRESET_NAME;
 }
 
-export type PresetDraft = { name: string; adjustments: Adjustments };
+/** `curves` is absent when the preset doesn't define any (see Preset.curves). */
+export type PresetDraft = { name: string; adjustments: Adjustments; curves?: CurvesState };
 
 export type ParsedPresetFile =
   | {
@@ -116,15 +135,25 @@ export function parsePresetFile(text: string): ParsedPresetFile {
       skipped++;
       continue;
     }
-    presets.push({
+    const draft: PresetDraft = {
       name: cleanPresetName(entry["name"]),
       adjustments: normalizeAdjustments(entry["adjustments"]),
-    });
+    };
+    // Only an object counts as curves. Anything else (a number, a list, text) is treated as "no
+    // curves", never as straight ones: that would silently reset a photo's curves on apply.
+    if (isRecord(entry["curves"])) draft.curves = normalizeCurves(entry["curves"]);
+    presets.push(draft);
   }
   return { ok: true, presets, skipped, fromNewerVersion: version > PRESET_FILE_VERSION };
 }
 
 const sameAdjustments = (a: Adjustments, b: Adjustments) => KEYS.every((k) => a[k] === b[k]);
+
+/** Both absent, or both present and equal. Absent and straight are different presets. */
+const sameCurves = (a: CurvesState | undefined, b: CurvesState | undefined) =>
+  a === undefined || b === undefined
+    ? a === b
+    : JSON.stringify(normalizeCurves(a)) === JSON.stringify(normalizeCurves(b));
 
 /** The first of "Name", "Name 2", "Name 3" … that is not in `taken` (compared ignoring case). */
 export function freeName(name: string, taken: ReadonlySet<string>): string {
@@ -155,9 +184,10 @@ export function planImport(
   drafts: readonly PresetDraft[],
   makeId: () => string = () => crypto.randomUUID(),
 ): ImportPlan {
-  const known: { name: string; adjustments: Adjustments }[] = existing.map((p) => ({
+  const known: PresetDraft[] = existing.map((p) => ({
     name: p.name,
     adjustments: normalizeAdjustments(p.adjustments),
+    ...(p.curves ? { curves: normalizeCurves(p.curves) } : {}),
   }));
   const taken = new Set(known.map((p) => p.name.toLowerCase()));
   const toAdd: StoredPreset[] = [];
@@ -168,7 +198,8 @@ export function planImport(
     const identical = known.some(
       (p) =>
         p.name.toLowerCase() === draft.name.toLowerCase() &&
-        sameAdjustments(p.adjustments, draft.adjustments),
+        sameAdjustments(p.adjustments, draft.adjustments) &&
+        sameCurves(p.curves, draft.curves),
     );
     if (identical) {
       duplicates++;
@@ -177,8 +208,13 @@ export function planImport(
     const name = freeName(draft.name, taken);
     if (name !== draft.name) renamed++;
     taken.add(name.toLowerCase());
-    known.push({ name, adjustments: draft.adjustments });
-    toAdd.push({ id: makeId(), name, adjustments: changedOnly(draft.adjustments) });
+    known.push({ ...draft, name });
+    toAdd.push({
+      id: makeId(),
+      name,
+      adjustments: changedOnly(draft.adjustments),
+      ...(draft.curves ? { curves: draft.curves } : {}),
+    });
   }
   return { toAdd, duplicates, renamed };
 }

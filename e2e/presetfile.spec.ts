@@ -1,16 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
-import { openTestPhoto } from "./helpers";
+import { openTestPhoto, pixelAt } from "./helpers";
 
 const tool = (page: Page, name: string) => page.getByRole("button", { name, exact: true }).click();
 const exportButton = (page: Page) => page.getByRole("button", { name: "Export presets" });
 const fileInput = (page: Page) => page.getByLabel("Import presets file");
 
-/** Pulls Exposure all the way down, saves the result as a preset with this name, and leaves the Presets tool open. */
-async function saveAPreset(page: Page, name: string) {
-  const exposure = page.getByRole("slider", { name: "Exposure" });
-  await exposure.focus();
-  await page.keyboard.press("Home");
+/** Moves a slider (by default Exposure, all the way down), saves the result as a preset with this name, and leaves the Presets tool open. */
+async function saveAPreset(page: Page, name: string, slider = "Exposure", key = "Home") {
+  await page.getByRole("slider", { name: slider }).focus();
+  await page.keyboard.press(key);
   await tool(page, "Presets");
   await page.getByRole("button", { name: "Save current as preset" }).click();
   await page.getByPlaceholder("Preset name").fill(name);
@@ -38,6 +37,9 @@ test.describe("preset files", () => {
 
     const file = JSON.parse(await exportedText(page));
     expect(file.format).toBe("pictoe-presets");
+    expect(file.version).toBe(2);
+    // curves are recorded even when straight, so applying the preset later resets them
+    expect(file.presets[0].curves.rgb).toHaveLength(2);
     expect(file.presets).toHaveLength(1);
     expect(file.presets[0].name).toBe("Dark test");
     expect(Object.keys(file.presets[0].adjustments)).toEqual(["exposure"]);
@@ -100,5 +102,36 @@ test.describe("preset files", () => {
       "aria-valuenow",
       "-100",
     );
+  });
+
+  test("a preset that records curves puts them back; a built-in one leaves them alone", async ({
+    page,
+  }) => {
+    const BACKGROUND = { x: 0.5, y: 0.9 } as const;
+    const green = async () => (await pixelAt(page, BACKGROUND))[1]!;
+
+    await openTestPhoto(page);
+    const before = await green();
+
+    // Saved while the curves are straight, so it records straight curves.
+    await saveAPreset(page, "Straight", "Contrast", "ArrowUp"); // one nudge: saving needs an edit
+
+    // Pull the middle of the RGB curve down: the background gets darker.
+    await tool(page, "Curves");
+    await page.getByRole("button", { name: "Add point" }).click();
+    const point = page.getByRole("slider", { name: "RGB curve point 2 of 3" });
+    await point.focus();
+    for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowDown");
+    await expect.poll(green).toBeLessThan(before - 8);
+    const dark = await green();
+
+    // A built-in preset doesn't define curves, so they stay.
+    await tool(page, "Presets");
+    await page.getByRole("button", { name: "Warm Film", exact: true }).click();
+    await expect.poll(green).toBeLessThan(before - 5);
+
+    // "Straight" records straight curves, so applying it brings the background back.
+    await page.getByRole("button", { name: "Straight", exact: true }).click();
+    await expect.poll(green).toBeGreaterThan(dark + 8);
   });
 });
