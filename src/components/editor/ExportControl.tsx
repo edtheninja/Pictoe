@@ -207,17 +207,14 @@ export function ExportControl() {
       const { blob: encoded } = result;
       // Name the file after what the browser actually produced, not just what was asked for.
       const outcome = resolveExportOutcome(format, encoded);
-      // Photo info goes only into a real JPEG, sized as written. If it can't be added, the file
-      // is still saved, without it, and the note says so.
+      // Photo info goes into whatever the browser really produced (JPEG, PNG or WebP), sized as
+      // written. If it can't be added the file is still saved, without it, and the note says so.
       let blob = encoded;
       let infoNote: string | null = null;
-      const infoOptions =
-        outcome.extension === "jpg"
-          ? photoInfoExportOptions(keepInfo, keepLocation, photoInfo, {
-              width: result.width,
-              height: result.height,
-            })
-          : null;
+      const infoOptions = photoInfoExportOptions(keepInfo, keepLocation, photoInfo, {
+        width: result.width,
+        height: result.height,
+      });
       if (infoOptions && photoInfo) {
         blob = await withPhotoInfo(encoded, photoInfo, infoOptions);
         if (blob === encoded)

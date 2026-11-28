@@ -16,15 +16,23 @@
  * - The file is untrusted: every read is bounds-checked, sizes and counts are capped, and anything
  *   unreadable gives "no photo info", never an exception or a half-written file.
  *
- * Pure apart from the two small Blob helpers at the end. JPEG only, for now.
+ * The same rules apply to JPEG, PNG and WebP, in any combination of source and output: the
+ * allowlist and the rewriting are shared, and each container only differs in where the EXIF data
+ * lives (a JPEG segment, a PNG "eXIf" chunk, a WebP "EXIF" chunk).
+ *
+ * Pure apart from the two small Blob helpers at the end.
  */
 import {
   buildExifSegment,
   findExifPayload,
+  isJpeg,
   readJpegLayout,
   withExifSegment,
   MAX_SEGMENT_PAYLOAD,
 } from "./jpegSegments";
+import { findPngExif, isPng, withExifChunk } from "./pngChunks";
+import { findWebpExif, isWebp, withExifWebpChunk } from "./webpChunks";
+import { blobReader, bytesReader, type RangeReader } from "./rangeReader";
 
 type Entry = {
   tag: number;
@@ -360,13 +368,11 @@ function buildTiff(little: boolean, ifd0: Entry[], exif: Entry[], gps: Entry[]):
 }
 
 /**
- * The EXIF segment for an exported picture, or null when there is nothing to write or it would
- * not fit in one segment (then the file is simply saved without photo info).
+ * The EXIF data (TIFF structure) for an exported picture, or null when there is nothing to write
+ * or it would not fit in one JPEG segment (then the file is simply saved without photo info; the
+ * same limit is kept for every format so a file means the same thing whatever it is saved as).
  */
-export function buildPhotoInfoSegment(
-  info: PhotoInfo,
-  options: PhotoInfoOptions,
-): Uint8Array | null {
+export function buildPhotoInfoTiff(info: PhotoInfo, options: PhotoInfoOptions): Uint8Array | null {
   const { little } = info;
   const width = Math.max(1, Math.round(options.width));
   const height = Math.max(1, Math.round(options.height));
@@ -402,8 +408,16 @@ export function buildPhotoInfoSegment(
   const unique = (list: Entry[]) =>
     list.filter((e, i) => list.findIndex((x) => x.tag === e.tag) === i);
   const tiff = buildTiff(little, unique(ifd0), unique(exif), unique(gps));
-  if (tiff.length + 6 > MAX_SEGMENT_PAYLOAD) return null;
-  return buildExifSegment(tiff);
+  return tiff.length + 6 > MAX_SEGMENT_PAYLOAD ? null : tiff;
+}
+
+/** The JPEG EXIF segment for an exported picture, or null (see buildPhotoInfoTiff). */
+export function buildPhotoInfoSegment(
+  info: PhotoInfo,
+  options: PhotoInfoOptions,
+): Uint8Array | null {
+  const tiff = buildPhotoInfoTiff(info, options);
+  return tiff ? buildExifSegment(tiff) : null;
 }
 
 /** The JPEG with photo info added, or the JPEG as it was if that isn't possible. Never throws. */
@@ -420,34 +434,94 @@ export function addPhotoInfoToJpeg(
   }
 }
 
-// --- Blobs (the only part that touches the browser's types) -----------------------------------
+// --- Any supported format ---------------------------------------------------------------------
 
-const JPEG_TYPES = ["image/jpeg", "image/jpg"];
+export type PhotoInfoFormat = "jpeg" | "png" | "webp";
 
-/** Reads photo info from the original file. Only the start of the file is read. */
-export async function readPhotoInfo(file: Blob): Promise<PhotoInfo | null> {
-  if (!JPEG_TYPES.includes(file.type)) return null;
+/** Which container these bytes are, by their first bytes (never by file name or declared type). */
+export function sniffFormat(head: Uint8Array): PhotoInfoFormat | null {
+  if (isJpeg(head)) return "jpeg";
+  if (isPng(head)) return "png";
+  if (isWebp(head)) return "webp";
+  return null;
+}
+
+const MIME: Record<PhotoInfoFormat, string> = {
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+};
+
+/**
+ * Photo info from a file of any supported format, read a piece at a time: a big PNG or WebP is
+ * searched by its chunk headers, not loaded. Null when there is none, or the file isn't readable.
+ */
+export async function readPhotoInfoFromReader(reader: RangeReader): Promise<PhotoInfo | null> {
   try {
-    return readPhotoInfoFromBytes(
-      new Uint8Array(await file.slice(0, MAX_READ_BYTES).arrayBuffer()),
-    );
+    const head = await reader.read(0, 16);
+    const format = sniffFormat(head);
+    if (format === "jpeg") {
+      return readPhotoInfoFromBytes(await reader.read(0, Math.min(reader.size, MAX_READ_BYTES)));
+    }
+    const tiff =
+      format === "png"
+        ? await findPngExif(reader)
+        : format === "webp"
+          ? await findWebpExif(reader)
+          : null;
+    return tiff ? parsePhotoInfo(tiff) : null;
   } catch {
     return null;
   }
 }
 
-/** The exported JPEG with photo info added; the same blob back if that fails. */
+/** Photo info from the bytes of a file of any supported format. */
+export const readPhotoInfoAny = (bytes: Uint8Array) => readPhotoInfoFromReader(bytesReader(bytes));
+
+/**
+ * The exported picture with photo info added, whatever its format (JPEG, PNG or WebP), or the same
+ * bytes back, the very same array, if that isn't possible. Never throws.
+ */
+export function addPhotoInfo(
+  image: Uint8Array,
+  info: PhotoInfo,
+  options: PhotoInfoOptions,
+): Uint8Array {
+  try {
+    const format = sniffFormat(image);
+    if (format === "jpeg") return addPhotoInfoToJpeg(image, info, options);
+    const tiff = buildPhotoInfoTiff(info, options);
+    if (!tiff) return image;
+    if (format === "png") return withExifChunk(image, tiff);
+    if (format === "webp") {
+      return withExifWebpChunk(image, tiff, { width: options.width, height: options.height });
+    }
+    return image;
+  } catch {
+    return image;
+  }
+}
+
+// --- Blobs (the only part that touches the browser's types) -----------------------------------
+
+/** Reads photo info from the original file, whatever it is called or declared to be. */
+export async function readPhotoInfo(file: Blob): Promise<PhotoInfo | null> {
+  return readPhotoInfoFromReader(blobReader(file));
+}
+
+/** The exported image with photo info added; the same blob back if that isn't possible. */
 export async function withPhotoInfo(
-  jpeg: Blob,
+  image: Blob,
   info: PhotoInfo,
   options: PhotoInfoOptions,
 ): Promise<Blob> {
   try {
-    const bytes = new Uint8Array(await jpeg.arrayBuffer());
-    const out = addPhotoInfoToJpeg(bytes, info, options);
-    return out === bytes ? jpeg : new Blob([out as BlobPart], { type: "image/jpeg" });
+    const bytes = new Uint8Array(await image.arrayBuffer());
+    const out = addPhotoInfo(bytes, info, options);
+    const format = sniffFormat(out);
+    return out === bytes || !format ? image : new Blob([out as BlobPart], { type: MIME[format] });
   } catch {
-    return jpeg;
+    return image;
   }
 }
 
@@ -465,8 +539,8 @@ export function photoInfoChoice(
   format: string,
   info: PhotoInfo | null | undefined,
 ): PhotoInfoChoice {
-  if (format !== "image/jpeg") {
-    return { kind: "unavailable", reason: "Photo info can be kept when saving as JPG." };
+  if (!Object.values(MIME).includes(format)) {
+    return { kind: "unavailable", reason: "Photo info can't be kept in this format." };
   }
   if (info === undefined) return { kind: "unavailable", reason: "Reading the photo…" };
   if (info === null) {

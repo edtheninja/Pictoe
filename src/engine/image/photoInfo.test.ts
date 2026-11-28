@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  addPhotoInfo,
   addPhotoInfoToJpeg,
   buildPhotoInfoSegment,
   describePhotoInfo,
@@ -8,16 +9,28 @@ import {
   photoInfoChoice,
   photoInfoExportOptions,
   readPhotoInfo,
+  readPhotoInfoAny,
   readPhotoInfoFromBytes,
+  sniffFormat,
   withPhotoInfo,
   type PhotoInfo,
 } from "./photoInfo";
 import { findExifPayload, isExifSegment, readJpegLayout } from "./jpegSegments";
+import { findPngExif } from "./pngChunks";
+import { findWebpExif } from "./webpChunks";
+import { bytesReader } from "./rangeReader";
 import {
   NEVER_EXPORTED,
   cameraBigEndian,
   cameraLittleEndian,
+  cameraPng,
+  cameraWebp,
+  canvasAlphaPng,
+  canvasAlphaWebp,
+  canvasLosslessWebp,
+  canvasLossyWebp,
   canvasOutput,
+  canvasPng,
 } from "./photoInfo.fixtures";
 
 const SIZE = { width: 40, height: 30 };
@@ -31,8 +44,23 @@ const text = (b: Uint8Array) => Array.from(b, (c) => String.fromCharCode(c)).joi
  * the file's EXIF, so a test can prove something is absent rather than merely not parsed.
  */
 function allTags(file: Uint8Array) {
-  const layout = readJpegLayout(file)!;
-  const tiff = findExifPayload(file, layout)!;
+  return tagsOfTiff(findExifPayload(file, readJpegLayout(file)!)!);
+}
+
+/** The EXIF data of a file of any supported format, as TIFF bytes. */
+async function tiffOfAny(file: Uint8Array): Promise<Uint8Array> {
+  const format = sniffFormat(file);
+  const reader = bytesReader(file);
+  const tiff =
+    format === "jpeg"
+      ? findExifPayload(file, readJpegLayout(file)!)
+      : format === "png"
+        ? await findPngExif(reader)
+        : await findWebpExif(reader);
+  return tiff!;
+}
+
+function tagsOfTiff(tiff: Uint8Array) {
   const little = text(tiff.subarray(0, 2)) === "II";
   const v = new DataView(tiff.buffer, tiff.byteOffset, tiff.byteLength);
   const read = (at: number) => {
@@ -309,10 +337,16 @@ describe("damaged and hostile files", () => {
 describe("the Blob helpers", () => {
   const blobOf = (b: Uint8Array, type = "image/jpeg") => new Blob([b as BlobPart], { type });
 
-  it("reads photo info from a JPEG file, and from nothing else", async () => {
-    expect(await readPhotoInfo(blobOf(cameraBigEndian()))).not.toBeNull();
-    expect(await readPhotoInfo(blobOf(cameraBigEndian(), "image/png"))).toBeNull();
-    expect(await readPhotoInfo(blobOf(canvasOutput()))).toBeNull();
+  it("reads photo info from a JPEG, PNG or WebP file, by what it is and not what it is called", async () => {
+    for (const file of [cameraBigEndian, cameraPng, cameraWebp]) {
+      expect(await readPhotoInfo(blobOf(file()))).not.toBeNull();
+      expect(await readPhotoInfo(blobOf(file(), "image/gif"))).not.toBeNull(); // wrong label, same file
+      expect(await readPhotoInfo(blobOf(file(), ""))).not.toBeNull();
+    }
+    for (const file of [canvasOutput, canvasPng, canvasLossyWebp]) {
+      expect(await readPhotoInfo(blobOf(file()))).toBeNull(); // no EXIF in them
+    }
+    expect(await readPhotoInfo(blobOf(Uint8Array.of(1, 2, 3, 4, 5)))).toBeNull();
   });
 
   it("adds photo info to an exported JPEG blob", async () => {
@@ -333,17 +367,19 @@ describe("the Blob helpers", () => {
 describe("what the Export panel offers", () => {
   const info = () => readPhotoInfoFromBytes(cameraBigEndian())!;
 
-  it("is available for a JPEG export of a photo that has info, and says what is in it", () => {
-    expect(photoInfoChoice("image/jpeg", info())).toEqual({
-      kind: "available",
-      summary: "camera, exposure, date, artist and copyright",
-      hasLocation: true,
-    });
+  it("is available for a JPEG, PNG or WebP export of a photo that has info, and says what is in it", () => {
+    for (const format of ["image/jpeg", "image/png", "image/webp"]) {
+      expect(photoInfoChoice(format, info())).toEqual({
+        kind: "available",
+        summary: "camera, exposure, date, artist and copyright",
+        hasLocation: true,
+      });
+    }
   });
 
   it("says why it isn't available", () => {
-    expect(photoInfoChoice("image/png", info())).toMatchObject({ kind: "unavailable" });
-    expect(photoInfoChoice("image/webp", info())).toMatchObject({ kind: "unavailable" });
+    expect(photoInfoChoice("image/gif", info())).toMatchObject({ kind: "unavailable" });
+    expect(photoInfoChoice("image/avif", info())).toMatchObject({ kind: "unavailable" });
     expect(photoInfoChoice("image/jpeg", null)).toMatchObject({
       kind: "unavailable",
       reason: "This photo has no camera information to keep.",
@@ -380,5 +416,173 @@ describe("what the Export panel offers", () => {
     });
     // the location switch alone, without keeping the info, writes nothing at all
     expect(photoInfoExportOptions(false, true, info(), SIZE)).toBeNull();
+  });
+});
+
+// --- Every source format into every output format ------------------------------------------------
+
+const SOURCES: [string, () => Uint8Array][] = [
+  ["a JPEG", cameraBigEndian],
+  ["a little-endian JPEG", cameraLittleEndian],
+  ["a PNG", cameraPng],
+  ["a WebP", cameraWebp],
+];
+const OUTPUTS: [string, () => Uint8Array][] = [
+  ["a JPEG", canvasOutput],
+  ["a PNG", canvasPng],
+  ["a PNG with alpha", canvasAlphaPng],
+  ["a lossy WebP", canvasLossyWebp],
+  ["a lossless WebP", canvasLosslessWebp],
+  ["a WebP with alpha", canvasAlphaWebp],
+];
+
+describe.each(SOURCES)("photo info from %s", (_s, source) => {
+  describe.each(OUTPUTS)("exported as %s", (_o, output) => {
+    const run = async (includeLocation: boolean) => {
+      const info = (await readPhotoInfoAny(source()))!;
+      const out = addPhotoInfo(output(), info, { ...SIZE, includeLocation });
+      return { info, out, tags: tagsOfTiff(await tiffOfAny(out)) };
+    };
+
+    it("is read from the source and written into the output", async () => {
+      const { info, out, tags } = await run(false);
+      expect(describePhotoInfo(info)).toBe("camera, exposure, date, artist and copyright");
+      expect(out).not.toBe(output());
+      expect(sniffFormat(out)).toBe(sniffFormat(output()));
+      expect(text(tags.ifd0.get(0x010f)!.raw)).toBe("TestCam\0");
+      expect(text(tags.ifd0.get(0x8298)!.raw)).toBe("(c) 2026 Adnan\0");
+      expect(text(tags.exif.get(0xa434)!.raw)).toBe("TC 50mm f/1.8 Lens\0");
+    });
+
+    it("describes the exported picture, not the original", async () => {
+      const { tags } = await run(false);
+      expect(u16(tags.ifd0.get(0x0112)!, tags.little)).toBe(1);
+      expect(u32(tags.exif.get(0xa002)!, tags.little)).toBe(40);
+      expect(u32(tags.exif.get(0xa003)!, tags.little)).toBe(30);
+      expect(u16(tags.exif.get(0xa001)!, tags.little)).toBe(1);
+    });
+
+    it("writes no location unless asked, and the source's own location when asked", async () => {
+      const off = await run(false);
+      expect(off.tags.gps.size).toBe(0);
+      expect(off.tags.ifd0.has(0x8825)).toBe(false);
+      const on = await run(true);
+      const src = tagsOfTiff(await tiffOfAny(source()));
+      for (const tag of [0x01, 0x02, 0x03, 0x04]) {
+        expect(Array.from(on.tags.gps.get(tag)!.raw)).toEqual(Array.from(src.gps.get(tag)!.raw));
+      }
+    });
+
+    it("leaves out everything that identifies, including the thumbnail", async () => {
+      const { out, tags } = await run(true);
+      for (const secret of NEVER_EXPORTED) expect(text(out)).not.toContain(secret);
+      for (const tag of [0x010e, 0x0131, 0x0132]) expect(tags.ifd0.has(tag)).toBe(false);
+      for (const tag of [0x927c, 0xa430, 0xa431]) expect(tags.exif.has(tag)).toBe(false);
+      expect(tags.nextAfterIfd0).toBe(0);
+    });
+
+    it("can be read back, and exporting that again changes nothing", async () => {
+      const { out } = await run(true);
+      const again = (await readPhotoInfoAny(out))!;
+      expect(describePhotoInfo(again)).toBe("camera, exposure, date, artist and copyright");
+      expect(hasLocation(again)).toBe(true);
+      const second = addPhotoInfo(output(), again, { ...SIZE, includeLocation: true });
+      expect(Array.from(second)).toEqual(Array.from(out));
+    });
+  });
+});
+
+describe("addPhotoInfo", () => {
+  const info = () => readPhotoInfoFromBytes(cameraBigEndian())!;
+
+  it("hands back the very same bytes for anything it can't write into", () => {
+    const gif = Uint8Array.of(0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 1, 0, 1, 0);
+    expect(addPhotoInfo(gif, info(), off)).toBe(gif);
+    const empty = new Uint8Array();
+    expect(addPhotoInfo(empty, info(), off)).toBe(empty);
+    const damaged = canvasPng().subarray(0, 50);
+    expect(addPhotoInfo(damaged, info(), off)).toBe(damaged);
+  });
+
+  it("writes nothing into a WebP whose size isn't the size it was told", () => {
+    const w = canvasLossyWebp();
+    expect(addPhotoInfo(w, info(), { width: 99, height: 30, includeLocation: false })).toBe(w);
+  });
+
+  it("recognises formats by their first bytes only", () => {
+    expect(sniffFormat(cameraBigEndian())).toBe("jpeg");
+    expect(sniffFormat(cameraPng())).toBe("png");
+    expect(sniffFormat(cameraWebp())).toBe("webp");
+    expect(sniffFormat(Uint8Array.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12))).toBeNull();
+  });
+
+  it("never throws on randomly damaged PNG or WebP files", async () => {
+    let seed = 7;
+    const rand = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+    for (const base of [
+      cameraPng(),
+      cameraWebp(),
+      canvasPng(),
+      canvasLossyWebp(),
+      canvasAlphaWebp(),
+    ]) {
+      for (let round = 0; round < 200; round++) {
+        const f = base.slice();
+        for (let k = 0; k < 1 + Math.floor(rand() * 6); k++) {
+          f[Math.floor(rand() * f.length)] = Math.floor(rand() * 256);
+        }
+        const cut = rand() < 0.25 ? f.subarray(0, Math.floor(rand() * f.length)) : f;
+        await readPhotoInfoAny(cut); // total: a failure here would reject and fail the test
+        const out = addPhotoInfo(cut, info(), on);
+        expect(out.length).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  it("only ever writes allowed tags into a PNG or WebP made from damaged EXIF", async () => {
+    const allowed = new Set([
+      0x010f, 0x0110, 0x0112, 0x011a, 0x011b, 0x0128, 0x013b, 0x0213, 0x8298, 0x8769, 0x8825,
+      0x829a, 0x829d, 0x8822, 0x8827, 0x9000, 0x9003, 0x9004, 0x9010, 0x9011, 0x9012, 0x9101,
+      0x9201, 0x9202, 0x9204, 0x9205, 0x9207, 0x9208, 0x9209, 0x920a, 0x9290, 0x9291, 0x9292,
+      0xa000, 0xa001, 0xa002, 0xa003, 0xa402, 0xa403, 0xa404, 0xa405, 0xa406, 0xa432, 0xa433,
+      0xa434, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x10, 0x11, 0x1d,
+    ]);
+    const base = await tiffOfAny(cameraPng());
+    let seed = 4242;
+    const rand = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+    let written = 0;
+    for (let round = 0; round < 200; round++) {
+      const t = base.slice();
+      for (let k = 0; k < 1 + Math.floor(rand() * 8); k++)
+        t[Math.floor(rand() * t.length)] = Math.floor(rand() * 256);
+      const info = parsePhotoInfo(t);
+      if (!info) continue;
+      for (const output of [canvasPng, canvasLossyWebp]) {
+        const out = addPhotoInfo(output(), info, on);
+        const tags = tagsOfTiff(await tiffOfAny(out));
+        for (const m of [tags.ifd0, tags.exif, tags.gps])
+          for (const tag of m.keys()) expect(allowed.has(tag)).toBe(true);
+        written++;
+      }
+    }
+    expect(written).toBeGreaterThan(100);
+  });
+});
+
+describe("the Blob helpers, for every format", () => {
+  const blobOf = (b: Uint8Array, type: string) => new Blob([b as BlobPart], { type });
+
+  it("adds photo info to an exported PNG or WebP blob and keeps its type", async () => {
+    const info = (await readPhotoInfo(blobOf(cameraBigEndian(), "image/jpeg")))!;
+    for (const [file, type] of [
+      [canvasPng, "image/png"],
+      [canvasLossyWebp, "image/webp"],
+    ] as const) {
+      const out = await withPhotoInfo(blobOf(file(), type), info, off);
+      expect(out.type).toBe(type);
+      const again = await readPhotoInfo(out);
+      expect(again).not.toBeNull();
+      expect(hasLocation(again!)).toBe(false);
+    }
   });
 });
